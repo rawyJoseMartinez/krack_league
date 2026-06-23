@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { db } from '../Firebase';
 import { doc, setDoc, collection, addDoc, query, where, getDocs, deleteDoc } from 'firebase/firestore';
@@ -85,7 +84,7 @@ export default function QuienesSomos({ data, sponsors, isAdmin }: QuienesSomosPr
         snapshot.forEach(async (docRef) => {
           await deleteDoc(docRef.ref);
         });
-        alert("Sponsor eliminado.");
+        snapshot.docs.length > 0 && alert("Sponsor eliminado.");
       } catch (error) {
         console.error("Error al borrar sponsor:", error);
       }
@@ -127,15 +126,60 @@ export default function QuienesSomos({ data, sponsors, isAdmin }: QuienesSomosPr
           </button>
         </form>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center bg-gray-950 p-6 md:p-12 rounded-2xl border border-gray-800 shadow-xl">
-          <div className="space-y-4">
-            <h2 className="text-3xl md:text-4xl font-extrabold text-[#05fcfe]">{data.titulo}</h2>
-            <p className="text-gray-300 text-base leading-relaxed whitespace-pre-wrap">
-              {data.descripcion}
-            </p>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center bg-gray-950 p-6 md:p-12 rounded-2xl border border-gray-800 shadow-xl">
+            <div className="space-y-4">
+              <h2 className="text-3xl md:text-4xl font-extrabold text-[#05fcfe]">{data.titulo}</h2>
+              <p className="text-gray-300 text-base leading-relaxed whitespace-pre-wrap">
+                {data.descripcion}
+              </p>
+            </div>
+            <div className="w-full h-80 rounded-xl overflow-hidden shadow-lg border border-gray-800">
+              <img src={data.fotoUrl} alt="Krack League staff" className="w-full h-full object-cover" />
+            </div>
           </div>
-          <div className="w-full h-80 rounded-xl overflow-hidden shadow-lg border border-gray-800">
-            <img src={data.fotoUrl} alt="Krack League staff" className="w-full h-full object-cover" />
+
+          {/* ======================================================= */}
+          {/* SECTOR DE REDES SOCIALES INTEGRADO */}
+          {/* ======================================================= */}
+          <div className="bg-gray-950 border border-gray-800 rounded-2xl p-6 md:p-8 flex flex-col md:flex-row justify-between items-center gap-6 shadow-xl">
+            <div className="space-y-2 text-center md:text-left">
+              <h3 className="text-xl font-bold text-white uppercase tracking-wider">¡Sintonizá la Comunidad!</h3>
+              <p className="text-sm text-gray-400 max-w-xl">
+                Seguinos en nuestras plataformas oficiales. Compartimos las mejores jugadas de cada jornada, resúmenes completos de partidos de baloncesto y transmisiones en vivo.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto shrink-0 justify-center">
+              {/* Botón Instagram */}
+              <a 
+                href="https://www.instagram.com/krackestudios/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-3 bg-gray-900/50 hover:bg-gradient-to-r hover:from-purple-600 hover:to-pink-500 text-gray-300 hover:text-white px-6 py-3 rounded-xl border border-gray-800 transition-all duration-300 min-w-[160px] group shadow-md font-bold text-sm tracking-wide"
+              >
+                <svg className="w-5 h-5 text-pink-500 group-hover:text-white transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                  <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                  <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                </svg>
+                Instagram
+              </a>
+
+              {/* Botón YouTube */}
+              <a 
+                href="https://www.youtube.com/@krack_zone" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-3 bg-gray-900/50 hover:bg-red-600 text-gray-300 hover:text-white px-6 py-3 rounded-xl border border-gray-800 transition-all duration-300 min-w-[160px] group shadow-md font-bold text-sm tracking-wide"
+              >
+                <svg className="w-5 h-5 text-red-500 group-hover:text-white transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path>
+                  <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon>
+                </svg>
+                YouTube
+              </a>
+            </div>
           </div>
         </div>
       )}

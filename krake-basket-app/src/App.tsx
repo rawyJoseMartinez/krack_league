@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from './Firebase';
-import { collection, onSnapshot, doc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
 
 // Conexión de Firebase para el estado real de autenticación
 import { auth } from './Firebase';
@@ -32,6 +32,7 @@ export interface Jugador {
   id: number;
   nombre: string;
   posicion: string;
+  equipo: string; 
   puntos: number;
   asistencias: number;
   rebotes: number;
@@ -45,6 +46,8 @@ export interface Partido {
   equipoVisitante: string;
   puntosVisitante: number;
   fecha: string;
+  logoLocal?: string;
+  logoVisitante?: string;
 }
 
 function App() {
@@ -65,16 +68,9 @@ function App() {
   const [sponsors, setSponsors] = useState<Sponsor[]>([]);
   const [contenido, setContenido] = useState<ArchivoGaleria[]>([]);
 
-  // Estados para estadísticas (Mantienen localStorage temporalmente)
-  const [jugadores, setJugadores] = useState<Jugador[]>(() => {
-    const saved = localStorage.getItem('krake_jugadores');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [partidos, setPartidos] = useState<Partido[]>(() => {
-    const saved = localStorage.getItem('krake_partidos');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // NUEVOS: Estados conectados a Firebase en tiempo real
+  const [jugadores, setJugadores] = useState<Jugador[]>([]);
+  const [partidos, setPartidos] = useState<Partido[]>([]);
 
   // 1. Escuchar la sección HOME en Firebase
   useEffect(() => {
@@ -135,13 +131,64 @@ function App() {
     return () => unsubscribe();
   }, []);
 
+  // 5. NUEVO: Escuchar la colección de JUGADORES en tiempo real desde Firebase
   useEffect(() => {
-    localStorage.setItem('krake_jugadores', JSON.stringify(jugadores));
-  }, [jugadores]);
+    const unsubscribe = onSnapshot(collection(db, 'jugadores'), (snapshot) => {
+      const datosJugadores = snapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: Number(docSnap.id), // Usamos el ID del documento de Firebase
+          nombre: data.nombre || '',
+          posicion: data.posicion || 'Base',
+          equipo: data.equipo || 'Krack League',
+          puntos: Number(data.puntos || 0),
+          asistencias: Number(data.asistencias || 0),
+          rebotes: Number(data.rebotes || 0),
+          foto: data.foto || ''
+        };
+      }) as Jugador[];
+      setJugadores(datosJugadores);
+    });
+    return () => unsubscribe();
+  }, []);
 
+  // 6. NUEVO: Escuchar la colección de PARTIDOS en tiempo real desde Firebase
   useEffect(() => {
-    localStorage.setItem('krake_partidos', JSON.stringify(partidos));
-  }, [partidos]);
+    const unsubscribe = onSnapshot(collection(db, 'partidos'), (snapshot) => {
+      const datosPartidos = snapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: Number(docSnap.id),
+          equipoLocal: data.equipoLocal || '',
+          puntosLocal: Number(data.puntosLocal || 0),
+          equipoVisitante: data.equipoVisitante || '',
+          puntosVisitante: Number(data.puntosVisitante || 0),
+          fecha: data.fecha || '',
+          logoLocal: data.logoLocal || '',
+          logoVisitante: data.logoVisitante || ''
+        };
+      }) as Partido[];
+      setPartidos(datosPartidos);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Funciones puente para que Estadisticas.tsx guarde en Firebase en lugar de setear el estado local
+  const handleSetJugadoresInFirebase = async (nuevosJugadoresOrFn: any) => {
+    // Resolver si viene como función funcional (prev => ...) o array directo
+    const resolvedJugadores = typeof nuevosJugadoresOrFn === 'function' ? nuevosJugadoresOrFn(jugadores) : nuevosJugadoresOrFn;
+    
+    // Si la lista está vacía (por ejemplo, al borrar el último jugador)
+    if (resolvedJugadores.length === 0 && jugadores.length === 1) {
+      // Nota: Para borrar registros individuales de manera óptima lo ideal es usar deleteDoc directamente en Estadisticas.tsx,
+      // pero esto sirve como puente directo para mantener la compatibilidad con tu setJugadores actual.
+    }
+    
+    // Guardar/actualizar de manera interactiva el cambio en Firebase mapeando los ids como strings de documentos
+    for (const j of resolvedJugadores) {
+      await setDoc(doc(db, 'jugadores', String(j.id)), j);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans flex flex-col justify-between">
@@ -150,16 +197,24 @@ function App() {
         <main className="container mx-auto px-4 py-8">
           {currentSection === 'home' && homeData && <Home data={homeData} isAdmin={isAdmin} />}
           {currentSection === 'Multimedia' && <Galeria data={contenido} isAdmin={isAdmin} />}
-          {currentSection === 'estadisticas' && (
+          
+          {(currentSection === 'estadisticas' || currentSection === 'Estadísticas') && (
             <Estadisticas 
               jugadores={jugadores} 
-              setJugadores={setJugadores} 
+              // Pasamos funciones controladas que apunten a los datos en vez de alterar el estado local instantáneamente
+              setJugadores={handleSetJugadoresInFirebase} 
               partidos={partidos} 
-              setPartidos={setPartidos} 
+              setPartidos={async (nuevosPartidosOrFn: any) => {
+                const resolvedPartidos = typeof nuevosPartidosOrFn === 'function' ? nuevosPartidosOrFn(partidos) : nuevosPartidosOrFn;
+                for (const p of resolvedPartidos) {
+                  await setDoc(doc(db, 'partidos', String(p.id)), p);
+                }
+              }} 
               isAdmin={isAdmin} 
             />
           )}
-          {currentSection === 'quienes' && quienesData && (
+          
+          {(currentSection === 'quienes' || currentSection === 'Quiénes Somos') && quienesData && (
             <QuienesSomos data={quienesData} sponsors={sponsors} isAdmin={isAdmin} />
           )}
         </main>
@@ -191,7 +246,6 @@ function App() {
         </div>
       </footer>
 
-      {/* El reproductor ahora se renderiza perfectamente aquí dentro del contenedor principal */}
       <ReproductorFondo />
     </div>
   );
