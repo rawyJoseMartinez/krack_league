@@ -19,7 +19,8 @@ export default function Login({ isAdmin }: LoginProps) {
       setIsOpen(false);
       setEmail('');
       setPassword('');
-    } catch (error: any) {
+    } catch (error) {
+      console.error('Error al iniciar sesión:', error);
       alert('Error al iniciar sesión: Verifica tu correo o contraseña.');
     }
   };

@@ -1,13 +1,7 @@
 import React, { useState } from 'react';
 import { db } from '../Firebase';
 import { collection, addDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
-
-interface ArchivoGaleria {
-  id: number;
-  tipo: 'foto' | 'video';
-  url: string;
-  desc: string;
-}
+import type { ArchivoGaleria } from '../types';
 
 interface GaleriaProps {
   data: ArchivoGaleria[];
@@ -24,7 +18,7 @@ export default function Galeria({ data, isAdmin }: GaleriaProps) {
   // Función robusta para extraer el ID de YouTube en CUALQUIER formato (watch, youtu.be, shorts o embed)
   const getYouTubeId = (url: string) => {
     if (!url) return null;
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
+    const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
     const match = url.match(regExp);
     return (match && match[2].length === 11) ? match[2] : null;
   };

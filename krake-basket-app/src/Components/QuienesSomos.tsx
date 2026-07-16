@@ -1,19 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { db } from '../Firebase';
 import { doc, setDoc, collection, addDoc, query, where, getDocs, deleteDoc } from 'firebase/firestore';
-
-interface Sponsor {
-  id: number;
-  nombre: string;
-  logoUrl: string;
-}
+import type { Sponsor, QuienesData } from '../types';
 
 interface QuienesSomosProps {
-  data: {
-    titulo: string;
-    descripcion: string;
-    fotoUrl: string;
-  };
+  data: QuienesData;
   sponsors: Sponsor[];
   isAdmin: boolean;
 }
@@ -29,11 +20,16 @@ export default function QuienesSomos({ data, sponsors, isAdmin }: QuienesSomosPr
   const [sponsorNombre, setSponsorNombre] = useState('');
   const [sponsorLogo, setSponsorLogo] = useState('');
 
-  useEffect(() => {
-    setTitulo(data.titulo);
-    setDescripcion(data.descripcion);
-    setFotoUrl(data.fotoUrl);
-  }, [data]);
+  // Cargar los datos vigentes de Firebase en el formulario recién al abrir la edición,
+  // para no pisar lo que el admin está tipeando si llega una actualización en tiempo real.
+  const handleToggleEdit = () => {
+    if (!editMode) {
+      setTitulo(data.titulo);
+      setDescripcion(data.descripcion);
+      setFotoUrl(data.fotoUrl);
+    }
+    setEditMode(!editMode);
+  };
 
   // Guardar cambios en la Historia
   const handleSaveHistoria = async (e: React.FormEvent) => {
@@ -84,7 +80,7 @@ export default function QuienesSomos({ data, sponsors, isAdmin }: QuienesSomosPr
         snapshot.forEach(async (docRef) => {
           await deleteDoc(docRef.ref);
         });
-        snapshot.docs.length > 0 && alert("Sponsor eliminado.");
+        if (snapshot.docs.length > 0) alert("Sponsor eliminado.");
       } catch (error) {
         console.error("Error al borrar sponsor:", error);
       }
@@ -96,8 +92,8 @@ export default function QuienesSomos({ data, sponsors, isAdmin }: QuienesSomosPr
       {/* BOTÓN PARA EDITAR HISTORIA */}
       {isAdmin && (
         <div className="flex justify-end">
-          <button 
-            onClick={() => setEditMode(!editMode)} 
+          <button
+            onClick={handleToggleEdit}
             className="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded transition-all cursor-pointer shadow-md"
           >
             {editMode ? '❌ Cancelar Edición' : '⚙️ Editar Quiénes Somos'}

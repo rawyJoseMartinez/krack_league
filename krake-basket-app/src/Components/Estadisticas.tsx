@@ -1,26 +1,5 @@
 import React, { useState } from 'react';
-
-export interface Jugador {
-  id: number;
-  nombre: string;
-  posicion: string;
-  equipo: string;
-  puntos: number;
-  asistencias: number;
-  rebotes: number;
-  foto: string;
-}
-
-export interface Partido {
-  id: number;
-  equipoLocal: string;
-  puntosLocal: number;
-  equipoVisitante: string;
-  puntosVisitante: number;
-  fecha: string;
-  logoLocal?: string;
-  logoVisitante?: string;
-}
+import type { Jugador, Partido } from '../types';
 
 export interface EstadisticasProps {
   jugadores: Jugador[];
@@ -109,7 +88,7 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
     alert("¡Tarjeta de jugador actualizada! 📝");
   };
 
-  const handleEditFormChange = (campo: keyof Jugador, valor: any) => {
+  const handleEditFormChange = <K extends keyof Jugador>(campo: K, valor: Jugador[K]) => {
     if (!editForm) return;
     setEditForm({
       ...editForm,

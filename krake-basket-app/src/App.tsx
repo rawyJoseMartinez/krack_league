@@ -14,41 +14,7 @@ import Estadisticas from './Components/Estadisticas';
 import QuienesSomos from './Components/QuienesSomos';
 import Login from './Components/Login';
 import ReproductorFondo from './Components/ReproductorFondo';
-
-export interface ArchivoGaleria {
-  id: number;
-  tipo: 'foto' | 'video';
-  url: string;
-  desc: string;
-}
-
-export interface Sponsor {
-  id: number;
-  nombre: string;
-  logoUrl: string;
-}
-
-export interface Jugador {
-  id: number;
-  nombre: string;
-  posicion: string;
-  equipo: string; 
-  puntos: number;
-  asistencias: number;
-  rebotes: number;
-  foto: string;
-}
-
-export interface Partido {
-  id: number;
-  equipoLocal: string;
-  puntosLocal: number;
-  equipoVisitante: string;
-  puntosVisitante: number;
-  fecha: string;
-  logoLocal?: string;
-  logoVisitante?: string;
-}
+import type { ArchivoGaleria, Sponsor, Jugador, Partido, HomeData, QuienesData } from './types';
 
 function App() {
   const [currentSection, setCurrentSection] = useState<string>('home');
@@ -63,8 +29,8 @@ function App() {
   }, []);
 
   // Estados dinámicos de Firebase
-  const [homeData, setHomeData] = useState<any>(null);
-  const [quienesData, setQuienesData] = useState<any>(null);
+  const [homeData, setHomeData] = useState<HomeData | null>(null);
+  const [quienesData, setQuienesData] = useState<QuienesData | null>(null);
   const [sponsors, setSponsors] = useState<Sponsor[]>([]);
   const [contenido, setContenido] = useState<ArchivoGaleria[]>([]);
 
@@ -76,7 +42,7 @@ function App() {
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, 'home', 'principal'), (docSnap) => {
       if (docSnap.exists()) {
-        setHomeData(docSnap.data());
+        setHomeData(docSnap.data() as HomeData);
       } else {
         setHomeData({
           titulo: "BIENVENIDOS A LA KRACK LEAGUE",
@@ -92,7 +58,7 @@ function App() {
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, 'quienes', 'principal'), (docSnap) => {
       if (docSnap.exists()) {
-        setQuienesData(docSnap.data());
+        setQuienesData(docSnap.data() as QuienesData);
       } else {
         setQuienesData({
           titulo: "Nuestra Historia",
@@ -174,7 +140,7 @@ function App() {
   }, []);
 
   // Funciones puente para que Estadisticas.tsx guarde en Firebase en lugar de setear el estado local
-  const handleSetJugadoresInFirebase = async (nuevosJugadoresOrFn: any) => {
+  const handleSetJugadoresInFirebase = async (nuevosJugadoresOrFn: Jugador[] | ((prev: Jugador[]) => Jugador[])) => {
     // Resolver si viene como función funcional (prev => ...) o array directo
     const resolvedJugadores = typeof nuevosJugadoresOrFn === 'function' ? nuevosJugadoresOrFn(jugadores) : nuevosJugadoresOrFn;
     
@@ -190,6 +156,13 @@ function App() {
     }
   };
 
+  const handleSetPartidosInFirebase = async (nuevosPartidosOrFn: Partido[] | ((prev: Partido[]) => Partido[])) => {
+    const resolvedPartidos = typeof nuevosPartidosOrFn === 'function' ? nuevosPartidosOrFn(partidos) : nuevosPartidosOrFn;
+    for (const p of resolvedPartidos) {
+      await setDoc(doc(db, 'partidos', String(p.id)), p);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans flex flex-col justify-between">
       <div className="w-full">
@@ -197,24 +170,19 @@ function App() {
         <main className="container mx-auto px-4 py-8">
           {currentSection === 'home' && homeData && <Home data={homeData} isAdmin={isAdmin} />}
           {currentSection === 'Multimedia' && <Galeria data={contenido} isAdmin={isAdmin} />}
-          
-          {(currentSection === 'estadisticas' || currentSection === 'Estadísticas') && (
-            <Estadisticas 
-              jugadores={jugadores} 
+
+          {currentSection === 'estadisticas' && (
+            <Estadisticas
+              jugadores={jugadores}
               // Pasamos funciones controladas que apunten a los datos en vez de alterar el estado local instantáneamente
-              setJugadores={handleSetJugadoresInFirebase} 
-              partidos={partidos} 
-              setPartidos={async (nuevosPartidosOrFn: any) => {
-                const resolvedPartidos = typeof nuevosPartidosOrFn === 'function' ? nuevosPartidosOrFn(partidos) : nuevosPartidosOrFn;
-                for (const p of resolvedPartidos) {
-                  await setDoc(doc(db, 'partidos', String(p.id)), p);
-                }
-              }} 
-              isAdmin={isAdmin} 
+              setJugadores={handleSetJugadoresInFirebase}
+              partidos={partidos}
+              setPartidos={handleSetPartidosInFirebase}
+              isAdmin={isAdmin}
             />
           )}
-          
-          {(currentSection === 'quienes' || currentSection === 'Quiénes Somos') && quienesData && (
+
+          {currentSection === 'quienes' && quienesData && (
             <QuienesSomos data={quienesData} sponsors={sponsors} isAdmin={isAdmin} />
           )}
         </main>

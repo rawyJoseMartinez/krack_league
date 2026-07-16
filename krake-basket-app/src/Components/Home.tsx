@@ -1,14 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { db } from '../Firebase';
 import { doc, setDoc } from 'firebase/firestore';
+import type { HomeData } from '../types';
 
 interface HomeProps {
-  data: {
-    titulo: string;
-    subtitulo: string;
-    bannerUrl: string;
-  };
+  data: HomeData;
   isAdmin: boolean;
 }
 
@@ -18,12 +15,16 @@ export default function Home({ data, isAdmin }: HomeProps) {
   const [subtitulo, setSubtitulo] = useState(data.subtitulo);
   const [bannerUrl, setBannerUrl] = useState(data.bannerUrl);
 
-  // Sincronizar el formulario si los datos de Firebase cambian
-  useEffect(() => {
-    setTitulo(data.titulo);
-    setSubtitulo(data.subtitulo);
-    setBannerUrl(data.bannerUrl);
-  }, [data]);
+  // Cargar los datos vigentes de Firebase en el formulario recién al abrir la edición,
+  // para no pisar lo que el admin está tipeando si llega una actualización en tiempo real.
+  const handleToggleEdit = () => {
+    if (!editMode) {
+      setTitulo(data.titulo);
+      setSubtitulo(data.subtitulo);
+      setBannerUrl(data.bannerUrl);
+    }
+    setEditMode(!editMode);
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,8 +46,8 @@ export default function Home({ data, isAdmin }: HomeProps) {
     <div className="space-y-8">
       {isAdmin && (
         <div className="flex justify-end">
-          <button 
-            onClick={() => setEditMode(!editMode)} 
+          <button
+            onClick={handleToggleEdit}
             className="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded transition-all cursor-pointer shadow-md"
           >
             {editMode ? '❌ Cancelar Edición' : '⚙️ Editar Sección Inicio'}
