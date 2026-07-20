@@ -44,3 +44,25 @@ export interface QuienesData {
   descripcion: string;
   fotoUrl: string;
 }
+
+export type EstadoFranja = 'reservado' | 'juego' | 'cerrado';
+
+export interface FranjaHoraria {
+  state: EstadoFranja;
+  note?: string;
+}
+
+export interface DiaCancha {
+  hours?: Record<number, FranjaHoraria>;
+}
+
+export type EstadoSolicitud = 'pendiente' | 'aprobada' | 'rechazada';
+
+export interface SolicitudReserva {
+  id: string;
+  fecha: string; // YYYY-MM-DD
+  hora: number;
+  nombre: string;
+  telefono: string; // dígitos, con código de país (ej. 549...)
+  estado: EstadoSolicitud;
+}

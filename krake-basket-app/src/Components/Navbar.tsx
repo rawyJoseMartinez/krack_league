@@ -14,6 +14,7 @@ export default function Navbar({ setSection, currentSection }: NavbarProps) {
     { id: 'home', label: 'Inicio' },
     { id: 'Multimedia', label: 'Multimedia' },
     { id: 'estadisticas', label: 'Estadísticas' },
+    { id: 'cancha', label: 'Reservar Cancha' },
     { id: 'quienes', label: 'Quiénes Somos' }
   ];
 

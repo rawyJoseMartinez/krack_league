@@ -12,6 +12,7 @@ import Home from './Components/Home';
 import Galeria from './Components/Galeria';
 import Estadisticas from './Components/Estadisticas';
 import QuienesSomos from './Components/QuienesSomos';
+import CalendarioCancha from './Components/CalendarioCancha';
 import Login from './Components/Login';
 import ReproductorFondo from './Components/ReproductorFondo';
 import type { ArchivoGaleria, Sponsor, Jugador, Partido, HomeData, QuienesData } from './types';
@@ -181,6 +182,8 @@ function App() {
               isAdmin={isAdmin}
             />
           )}
+
+          {currentSection === 'cancha' && <CalendarioCancha isAdmin={isAdmin} />}
 
           {currentSection === 'quienes' && quienesData && (
             <QuienesSomos data={quienesData} sponsors={sponsors} isAdmin={isAdmin} />
