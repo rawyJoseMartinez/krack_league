@@ -53,6 +53,9 @@ export default function Tienda({ productos, onGuardarProducto, onDeleteProducto,
   const [colorElegido, setColorElegido] = useState('');
   const [cantidad, setCantidad] = useState(1);
 
+  // Estado del visor de imagen ampliada
+  const [imagenAmpliada, setImagenAmpliada] = useState<{ url: string; alt: string } | null>(null);
+
   // Estados del banner de Servicios de Indumentaria
   const [slideServicioActivo, setSlideServicioActivo] = useState(0);
   const [sNombre, setSNombre] = useState('');
@@ -543,7 +546,10 @@ export default function Tienda({ productos, onGuardarProducto, onDeleteProducto,
                   </div>
                 )}
 
-                <div className="w-full h-48 bg-gray-900 flex items-center justify-center overflow-hidden">
+                <div
+                  onClick={() => setImagenAmpliada({ url: producto.imagenUrl || IMAGEN_PLACEHOLDER, alt: producto.nombre })}
+                  className="w-full h-48 bg-gray-900 flex items-center justify-center overflow-hidden cursor-zoom-in"
+                >
                   <img src={producto.imagenUrl || IMAGEN_PLACEHOLDER} alt={producto.nombre} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                 </div>
 
@@ -677,6 +683,24 @@ export default function Tienda({ productos, onGuardarProducto, onDeleteProducto,
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ==================== VISOR DE IMAGEN AMPLIADA ==================== */}
+      {imagenAmpliada && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4" onClick={() => setImagenAmpliada(null)}>
+          <button
+            className="absolute top-4 right-4 bg-gray-900 text-white hover:text-[#05fcfe] font-bold text-xl p-3 rounded-full transition-colors cursor-pointer"
+            onClick={() => setImagenAmpliada(null)}
+          >
+            ✕
+          </button>
+          <img
+            src={imagenAmpliada.url}
+            alt={imagenAmpliada.alt}
+            className="max-w-full max-h-[85vh] object-contain rounded-xl"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>
