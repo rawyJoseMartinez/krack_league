@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from './Firebase';
-import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 // Conexión de Firebase para el estado real de autenticación
 import { auth } from './Firebase';
@@ -15,7 +15,7 @@ import QuienesSomos from './Components/QuienesSomos';
 import CalendarioCancha from './Components/CalendarioCancha';
 import Login from './Components/Login';
 import ReproductorFondo from './Components/ReproductorFondo';
-import type { ArchivoGaleria, Sponsor, Jugador, Partido, HomeData, QuienesData } from './types';
+import type { ArchivoGaleria, Sponsor, Jugador, Partido, Equipo, Boxscore, HomeData, QuienesData } from './types';
 
 function App() {
   const [currentSection, setCurrentSection] = useState<string>('home');
@@ -38,17 +38,30 @@ function App() {
   // NUEVOS: Estados conectados a Firebase en tiempo real
   const [jugadores, setJugadores] = useState<Jugador[]>([]);
   const [partidos, setPartidos] = useState<Partido[]>([]);
+  const [equipos, setEquipos] = useState<Equipo[]>([]);
+  const [boxscores, setBoxscores] = useState<Boxscore[]>([]);
 
   // 1. Escuchar la sección HOME en Firebase
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, 'home', 'principal'), (docSnap) => {
       if (docSnap.exists()) {
-        setHomeData(docSnap.data() as HomeData);
+        const data = docSnap.data();
+        // Migración: los documentos viejos guardaban un único "bannerUrl" en vez de "banners"
+        const banners = Array.isArray(data.banners)
+          ? data.banners
+          : data.bannerUrl
+            ? [{ id: 1, tipo: 'imagen', url: data.bannerUrl }]
+            : [];
+        setHomeData({
+          titulo: data.titulo || '',
+          subtitulo: data.subtitulo || '',
+          banners
+        } as HomeData);
       } else {
         setHomeData({
           titulo: "BIENVENIDOS A LA KRACK LEAGUE",
           subtitulo: "El torneo de básquetbol amateur más competitivo.",
-          bannerUrl: "https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=1200"
+          banners: [{ id: 1, tipo: 'imagen', url: "https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=1200" }]
         });
       }
     });
@@ -140,6 +153,46 @@ function App() {
     return () => unsubscribe();
   }, []);
 
+  // 7. NUEVO: Escuchar la colección de EQUIPOS (clasificación) en tiempo real desde Firebase
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'equipos'), (snapshot) => {
+      const datosEquipos = snapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: Number(docSnap.id),
+          nombre: data.nombre || '',
+          logo: data.logo || '',
+          conferencia: data.conferencia || 'Este',
+          victorias: Number(data.victorias || 0),
+          derrotas: Number(data.derrotas || 0),
+          pct: data.pct || '',
+          gb: data.gb || '',
+          conf: data.conf || '',
+          div: data.div || '',
+          racha: data.racha || ''
+        };
+      }) as Equipo[];
+      setEquipos(datosEquipos);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 8. NUEVO: Escuchar la colección de BOXSCORES (estadísticas por partido) en tiempo real desde Firebase
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'boxscores'), (snapshot) => {
+      const datosBoxscores = snapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: Number(docSnap.id),
+          partidoId: Number(data.partidoId ?? docSnap.id),
+          jugadores: data.jugadores || []
+        };
+      }) as Boxscore[];
+      setBoxscores(datosBoxscores);
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Funciones puente para que Estadisticas.tsx guarde en Firebase en lugar de setear el estado local
   const handleSetJugadoresInFirebase = async (nuevosJugadoresOrFn: Jugador[] | ((prev: Jugador[]) => Jugador[])) => {
     // Resolver si viene como función funcional (prev => ...) o array directo
@@ -164,6 +217,25 @@ function App() {
     }
   };
 
+  const handleSetEquiposInFirebase = async (nuevosEquiposOrFn: Equipo[] | ((prev: Equipo[]) => Equipo[])) => {
+    const resolvedEquipos = typeof nuevosEquiposOrFn === 'function' ? nuevosEquiposOrFn(equipos) : nuevosEquiposOrFn;
+    for (const eq of resolvedEquipos) {
+      await setDoc(doc(db, 'equipos', String(eq.id)), eq);
+    }
+  };
+
+  const handleDeleteEquipoInFirebase = async (id: number) => {
+    await deleteDoc(doc(db, 'equipos', String(id)));
+  };
+
+  const handleGuardarBoxscoreInFirebase = async (boxscore: Boxscore) => {
+    await setDoc(doc(db, 'boxscores', String(boxscore.id)), boxscore);
+  };
+
+  const handleDeleteBoxscoreInFirebase = async (id: number) => {
+    await deleteDoc(doc(db, 'boxscores', String(id)));
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans flex flex-col justify-between">
       <div className="w-full">
@@ -179,6 +251,12 @@ function App() {
               setJugadores={handleSetJugadoresInFirebase}
               partidos={partidos}
               setPartidos={handleSetPartidosInFirebase}
+              equipos={equipos}
+              setEquipos={handleSetEquiposInFirebase}
+              onDeleteEquipo={handleDeleteEquipoInFirebase}
+              boxscores={boxscores}
+              onGuardarBoxscore={handleGuardarBoxscoreInFirebase}
+              onDeleteBoxscore={handleDeleteBoxscoreInFirebase}
               isAdmin={isAdmin}
             />
           )}

@@ -38,14 +38,17 @@ export default function Navbar({ setSection, currentSection }: NavbarProps) {
       <div className="container mx-auto flex justify-between items-center relative">
         
         {/* Nombre de la liga modificado para incluir el logo del casco */}
-        <h1 className="text-2xl font-black tracking-wider text-[#05fcfe] flex items-center gap-3">
-          <img 
-            src={logoKrack} 
-            alt="Logo Krack League" 
-            className="w-8 h-8 max-h-8 object-contain rounded-md border border-[#05fcfe]/20" 
+        <button
+          onClick={() => handleNav('home')}
+          className="text-2xl font-black tracking-wider text-[#05fcfe] flex items-center gap-3 cursor-pointer hover:text-white transition-colors"
+        >
+          <img
+            src={logoKrack}
+            alt="Logo Krack League"
+            className="w-8 h-8 max-h-8 object-contain rounded-md border border-[#05fcfe]/20"
           />
           KRACK LEAGUE
-        </h1>
+        </button>
         
         {/* Botón Hamburguesa */}
         <button 

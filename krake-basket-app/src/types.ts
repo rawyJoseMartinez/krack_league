@@ -22,6 +22,22 @@ export interface Jugador {
   foto: string;
 }
 
+export type Conferencia = 'Este' | 'Oeste';
+
+export interface Equipo {
+  id: number;
+  nombre: string;
+  logo?: string;
+  conferencia: Conferencia;
+  victorias: number;
+  derrotas: number;
+  pct: string; // ej: ",732"
+  gb: string; // ej: "4,0"
+  conf: string; // récord en conferencia, ej: "36-16"
+  div: string; // récord en división, ej: "10-6"
+  racha: string; // ej: "W3", "L1"
+}
+
 export interface Partido {
   id: number;
   equipoLocal: string;
@@ -33,10 +49,43 @@ export interface Partido {
   logoVisitante?: string;
 }
 
+export type PeriodoJuego = 'P1' | 'P2' | 'P3' | 'P4' | 'OT1' | 'OT2';
+
+export interface StatsPeriodo {
+  min: number;
+  pts: number;
+  fgM: number; // tiros de campo anotados
+  fgA: number; // tiros de campo intentados
+  tpM: number; // triples anotados
+  tpA: number; // triples intentados
+  ftM: number; // libres anotados
+  ftA: number; // libres intentados
+}
+
+export interface JugadorBoxscore {
+  jugadorId: number;
+  nombre: string;
+  foto?: string;
+  lado: 'local' | 'visitante';
+  periodos: Partial<Record<PeriodoJuego, StatsPeriodo>>;
+}
+
+export interface Boxscore {
+  id: number; // igual al id del Partido
+  partidoId: number;
+  jugadores: JugadorBoxscore[];
+}
+
+export interface HomeBanner {
+  id: number;
+  tipo: 'imagen' | 'video';
+  url: string;
+}
+
 export interface HomeData {
   titulo: string;
   subtitulo: string;
-  bannerUrl: string;
+  banners: HomeBanner[];
 }
 
 export interface QuienesData {
