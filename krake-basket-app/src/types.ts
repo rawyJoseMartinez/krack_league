@@ -115,3 +115,20 @@ export interface SolicitudReserva {
   telefono: string; // dígitos, con código de país (ej. 549...)
   estado: EstadoSolicitud;
 }
+
+export interface Producto {
+  id: number;
+  nombre: string;
+  descripcion: string;
+  categoria: string;
+  precio: number;
+  imagenUrl: string;
+  talles: string[]; // ej: ['S', 'M', 'L']
+}
+
+export interface ServicioIndumentaria {
+  id: number;
+  nombre: string;
+  descripcion: string;
+  imagenUrl: string;
+}

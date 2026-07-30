@@ -354,6 +354,8 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
     .filter(eq => eq.conferencia === conferenciaActiva)
     .sort((a, b) => (b.victorias - b.derrotas) - (a.victorias - a.derrotas));
 
+  const jugadoresOrdenados = [...jugadores].sort((a, b) => b.puntos - a.puntos);
+
   return (
     <div className="space-y-12">
       {/* TÍTULO DE LA SECCIÓN */}
@@ -915,47 +917,39 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
           </div>
         )}
 
-        {/* Grid de Jugadores */}
+        {/* Tabla de Ranking de Jugadores */}
         {jugadores.length === 0 ? (
           <div className="text-center py-6 text-gray-500 text-sm">No hay jugadores cargados en la plantilla.</div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-            {jugadores.map((jugador) => {
-              const esModoEdicion = editandoId === jugador.id && editForm;
+          <div className="overflow-x-auto bg-gray-950 border border-gray-800 rounded-xl shadow-lg">
+            <table className="w-full text-sm text-left whitespace-nowrap">
+              <thead>
+                <tr className="text-gray-500 text-[11px] uppercase tracking-wider border-b border-gray-800">
+                  <th className="py-3 px-4">Jugador</th>
+                  <th className="py-3 px-2 text-center">Equipo</th>
+                  <th className="py-3 px-2 text-center">Posición</th>
+                  <th className="py-3 px-2 text-center">PTS</th>
+                  <th className="py-3 px-2 text-center">AST</th>
+                  <th className="py-3 px-2 text-center">REB</th>
+                  {isAdmin && <th className="py-3 px-2 text-center">Acciones</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {jugadoresOrdenados.map((jugador, idx) => {
+                  const esModoEdicion = editandoId === jugador.id && editForm;
 
-              return (
-                <div key={jugador.id} className="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden relative flex flex-col shadow-lg group hover:border-gray-700 transition-all">
-                  
-                  {/* Botones de acción arriba a la derecha (Solo Admin) */}
-                  {isAdmin && !esModoEdicion && (
-                    <div className="absolute top-2 right-2 flex gap-1 z-10">
-                      <button onClick={() => handleIniciarEdicion(jugador)} className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] py-1 px-2 rounded cursor-pointer">
-                        ✏️ Editar
-                      </button>
-                      <button onClick={() => handleDeleteJugador(jugador.id)} className="bg-red-600 hover:bg-red-700 text-white text-[10px] py-1 px-2 rounded cursor-pointer">
-                        🗑️
-                      </button>
-                    </div>
-                  )}
-
-                  {/* VISTA EN MODO EDICIÓN */}
-                  {esModoEdicion ? (
-                    <form onSubmit={handleGuardarEdicion} className="p-4 space-y-3 flex-grow flex flex-col justify-between bg-gray-900">
-                      <div className="space-y-2">
-                        <h4 className="text-xs font-bold text-[#05fcfe] uppercase tracking-wider mb-2">✏️ Editar Tarjeta</h4>
-                        
-                        <div>
-                          <label className="text-[10px] text-gray-400 block">Nombre:</label>
-                          <input type="text" value={editForm.nombre} onChange={(e) => handleEditFormChange('nombre', e.target.value)} className="w-full p-1 text-xs rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" required />
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] text-gray-400 block">Equipo:</label>
-                          <input type="text" value={editForm.equipo} onChange={(e) => handleEditFormChange('equipo', e.target.value)} className="w-full p-1 text-xs rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" required />
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] text-gray-400 block">Posición:</label>
+                  if (esModoEdicion && editForm) {
+                    return (
+                      <tr key={jugador.id} className="border-b border-gray-800/60 bg-gray-900/80">
+                        <td className="py-2 px-4">
+                          <div className="flex items-center gap-2 min-w-[200px]">
+                            <img src={editForm.foto || LOGO_PLACEHOLDER} alt={editForm.nombre} className="w-8 h-8 rounded-full object-cover bg-gray-900 border border-gray-800 shrink-0" />
+                            <input type="text" value={editForm.nombre} onChange={(e) => handleEditFormChange('nombre', e.target.value)} className="w-full p-1 text-xs rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" required />
+                          </div>
+                          <input type="url" value={editForm.foto} onChange={(e) => handleEditFormChange('foto', e.target.value)} placeholder="URL foto" className="w-full p-1 text-xs rounded bg-gray-950 border border-gray-700 text-white focus:outline-none mt-1" />
+                        </td>
+                        <td className="px-2"><input type="text" value={editForm.equipo} onChange={(e) => handleEditFormChange('equipo', e.target.value)} className="w-24 p-1 text-xs text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" required /></td>
+                        <td className="px-2">
                           <select value={editForm.posicion} onChange={(e) => handleEditFormChange('posicion', e.target.value)} className="w-full p-1 text-xs rounded bg-gray-950 border border-gray-700 text-white focus:outline-none">
                             <option value="Base">Base (PG)</option>
                             <option value="Escolta">Escolta (SG)</option>
@@ -963,80 +957,57 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
                             <option value="Ala-Pívot">Ala-Pívot (PF)</option>
                             <option value="Pívot">Pívot (C)</option>
                           </select>
+                        </td>
+                        <td className="px-2"><input type="number" min="0" value={editForm.puntos} onChange={(e) => handleEditFormChange('puntos', Number(e.target.value))} className="w-14 p-1 text-xs text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" /></td>
+                        <td className="px-2"><input type="number" min="0" value={editForm.asistencias} onChange={(e) => handleEditFormChange('asistencias', Number(e.target.value))} className="w-14 p-1 text-xs text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" /></td>
+                        <td className="px-2"><input type="number" min="0" value={editForm.rebotes} onChange={(e) => handleEditFormChange('rebotes', Number(e.target.value))} className="w-14 p-1 text-xs text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" /></td>
+                        {isAdmin && (
+                          <td className="px-2">
+                            <div className="flex gap-1 justify-center">
+                              <button onClick={handleGuardarEdicion} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] py-1 px-2 rounded cursor-pointer">Guardar</button>
+                              <button onClick={handleCancelarEdicion} className="bg-gray-700 hover:bg-gray-600 text-white text-[10px] py-1 px-2 rounded cursor-pointer">Cancelar</button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  }
+
+                  return (
+                    <tr key={jugador.id} className="border-b border-gray-800/60 hover:bg-gray-900/60 transition-colors">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3 min-w-[200px]">
+                          <span className="text-gray-500 font-semibold w-4">{idx + 1}</span>
+                          <img src={jugador.foto || LOGO_PLACEHOLDER} alt={jugador.nombre} className="w-9 h-9 rounded-full object-cover bg-gray-900 border border-gray-800 shrink-0" />
+                          <span className="font-semibold text-white truncate">{jugador.nombre}</span>
                         </div>
-
-                        <div className="grid grid-cols-3 gap-1">
-                          <div>
-                            <label className="text-[10px] text-gray-400 block text-center">PTS:</label>
-                            <input type="number" min="0" value={editForm.puntos} onChange={(e) => handleEditFormChange('puntos', Number(e.target.value))} className="w-full p-1 text-xs text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
+                      </td>
+                      <td className="text-center px-2">
+                        <span className="bg-orange-950/40 border border-orange-800 text-orange-400 text-[9px] uppercase font-bold px-2 py-0.5 rounded whitespace-nowrap">
+                          {jugador.equipo}
+                        </span>
+                      </td>
+                      <td className="text-center px-2">
+                        <span className="bg-gray-900 border border-gray-700 text-[#05fcfe] text-[9px] uppercase font-bold px-2 py-0.5 rounded whitespace-nowrap">
+                          {jugador.posicion}
+                        </span>
+                      </td>
+                      <td className="text-center px-2 font-bold text-orange-400">{jugador.puntos}</td>
+                      <td className="text-center px-2 font-semibold text-sky-400">{jugador.asistencias}</td>
+                      <td className="text-center px-2 font-semibold text-emerald-400">{jugador.rebotes}</td>
+                      {isAdmin && (
+                        <td className="px-2">
+                          <div className="flex gap-1 justify-center">
+                            <button onClick={() => handleIniciarEdicion(jugador)} className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] py-1 px-2 rounded cursor-pointer">✏️</button>
+                            <button onClick={() => handleDeleteJugador(jugador.id)} className="bg-red-600 hover:bg-red-700 text-white text-[10px] py-1 px-2 rounded cursor-pointer">🗑️</button>
                           </div>
-                          <div>
-                            <label className="text-[10px] text-gray-400 block text-center">AST:</label>
-                            <input type="number" min="0" value={editForm.asistencias} onChange={(e) => handleEditFormChange('asistencias', Number(e.target.value))} className="w-full p-1 text-xs text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
-                          </div>
-                          <div>
-                            <label className="text-[10px] text-gray-400 block text-center">REB:</label>
-                            <input type="number" min="0" value={editForm.rebotes} onChange={(e) => handleEditFormChange('rebotes', Number(e.target.value))} className="w-full p-1 text-xs text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] text-gray-400 block">URL Foto:</label>
-                          <input type="url" value={editForm.foto} onChange={(e) => handleEditFormChange('foto', e.target.value)} className="w-full p-1 text-xs rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2 pt-3">
-                        <button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1 rounded text-xs transition-colors cursor-pointer">
-                          Guardar
-                        </button>
-                        <button type="button" onClick={handleCancelarEdicion} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-1 rounded text-xs transition-colors cursor-pointer">
-                          Cancelar
-                        </button>
-                      </div>
-                    </form>
-                  ) : (
-                    /* VISTA NORMAL DE LA TARJETA */
-                    <>
-                      <div className="w-full h-48 bg-gray-900 flex items-center justify-center overflow-hidden">
-                        <img src={jugador.foto} alt={jugador.nombre} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                      </div>
-
-                      <div className="p-4 space-y-3 flex-grow flex flex-col justify-between">
-                        <div className="text-center">
-                          <h4 className="text-lg font-bold text-white tracking-wide truncate">{jugador.nombre}</h4>
-                          
-                          <div className="flex justify-center items-center gap-1.5 mt-1">
-                            <span className="bg-orange-950/40 border border-orange-800 text-orange-400 text-[9px] uppercase font-bold px-2 py-0.5 rounded truncate max-w-[120px]">
-                              🛡️ {jugador.equipo}
-                            </span>
-                            <span className="bg-gray-900 border border-gray-700 text-[#05fcfe] text-[9px] uppercase font-bold px-2 py-0.5 rounded">
-                              {jugador.posicion}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2 bg-gray-900/60 p-2 rounded-lg border border-gray-800/80 text-center text-xs">
-                          <div>
-                            <p className="text-gray-500 font-medium text-[10px] uppercase">PTS</p>
-                            <p className="text-sm font-bold text-orange-400 mt-0.5">{jugador.puntos}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500 font-medium text-[10px] uppercase">AST</p>
-                            <p className="text-sm font-bold text-sky-400 mt-0.5">{jugador.asistencias}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500 font-medium text-[10px] uppercase">REB</p>
-                            <p className="text-sm font-bold text-emerald-400 mt-0.5">{jugador.rebotes}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                </div>
-              );
-            })}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

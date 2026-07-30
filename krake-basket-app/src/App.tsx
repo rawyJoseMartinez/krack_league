@@ -11,15 +11,16 @@ import Navbar from './Components/Navbar';
 import Home from './Components/Home';
 import Galeria from './Components/Galeria';
 import Estadisticas from './Components/Estadisticas';
+import Tienda from './Components/Tienda';
 import QuienesSomos from './Components/QuienesSomos';
 import CalendarioCancha from './Components/CalendarioCancha';
 import Login from './Components/Login';
 import ReproductorFondo from './Components/ReproductorFondo';
-import type { ArchivoGaleria, Sponsor, Jugador, Partido, Equipo, Boxscore, HomeData, QuienesData } from './types';
+import type { ArchivoGaleria, Sponsor, Jugador, Partido, Equipo, Boxscore, HomeData, QuienesData, Producto, ServicioIndumentaria } from './types';
 
 function App() {
   const [currentSection, setCurrentSection] = useState<string>('home');
-  const [isAdmin, setIsAdmin] = useState<boolean>(false); 
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
   
   // Escuchar estado del Administrador
   useEffect(() => {
@@ -40,6 +41,8 @@ function App() {
   const [partidos, setPartidos] = useState<Partido[]>([]);
   const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [boxscores, setBoxscores] = useState<Boxscore[]>([]);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [servicios, setServicios] = useState<ServicioIndumentaria[]>([]);
 
   // 1. Escuchar la sección HOME en Firebase
   useEffect(() => {
@@ -193,6 +196,43 @@ function App() {
     return () => unsubscribe();
   }, []);
 
+  // 9. NUEVO: Escuchar la colección de PRODUCTOS (tienda) en tiempo real desde Firebase
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'productos'), (snapshot) => {
+      const datosProductos = snapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: Number(docSnap.id),
+          nombre: data.nombre || '',
+          descripcion: data.descripcion || '',
+          categoria: data.categoria || '',
+          precio: Number(data.precio || 0),
+          imagenUrl: data.imagenUrl || '',
+          talles: Array.isArray(data.talles) ? data.talles : []
+        };
+      }) as Producto[];
+      setProductos(datosProductos);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 10. NUEVO: Escuchar la colección de SERVICIOS DE INDUMENTARIA (banner de la Tienda) en tiempo real desde Firebase
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'serviciosTienda'), (snapshot) => {
+      const datosServicios = snapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: Number(docSnap.id),
+          nombre: data.nombre || '',
+          descripcion: data.descripcion || '',
+          imagenUrl: data.imagenUrl || ''
+        };
+      }) as ServicioIndumentaria[];
+      setServicios(datosServicios);
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Funciones puente para que Estadisticas.tsx guarde en Firebase en lugar de setear el estado local
   const handleSetJugadoresInFirebase = async (nuevosJugadoresOrFn: Jugador[] | ((prev: Jugador[]) => Jugador[])) => {
     // Resolver si viene como función funcional (prev => ...) o array directo
@@ -236,6 +276,22 @@ function App() {
     await deleteDoc(doc(db, 'boxscores', String(id)));
   };
 
+  const handleGuardarProductoInFirebase = async (producto: Producto) => {
+    await setDoc(doc(db, 'productos', String(producto.id)), producto);
+  };
+
+  const handleDeleteProductoInFirebase = async (id: number) => {
+    await deleteDoc(doc(db, 'productos', String(id)));
+  };
+
+  const handleGuardarServicioInFirebase = async (servicio: ServicioIndumentaria) => {
+    await setDoc(doc(db, 'serviciosTienda', String(servicio.id)), servicio);
+  };
+
+  const handleDeleteServicioInFirebase = async (id: number) => {
+    await deleteDoc(doc(db, 'serviciosTienda', String(id)));
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans flex flex-col justify-between">
       <div className="w-full">
@@ -257,6 +313,18 @@ function App() {
               boxscores={boxscores}
               onGuardarBoxscore={handleGuardarBoxscoreInFirebase}
               onDeleteBoxscore={handleDeleteBoxscoreInFirebase}
+              isAdmin={isAdmin}
+            />
+          )}
+
+          {currentSection === 'tienda' && (
+            <Tienda
+              productos={productos}
+              onGuardarProducto={handleGuardarProductoInFirebase}
+              onDeleteProducto={handleDeleteProductoInFirebase}
+              servicios={servicios}
+              onGuardarServicio={handleGuardarServicioInFirebase}
+              onDeleteServicio={handleDeleteServicioInFirebase}
               isAdmin={isAdmin}
             />
           )}
