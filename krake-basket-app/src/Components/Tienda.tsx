@@ -13,6 +13,16 @@ export interface TiendaProps {
 
 const IMAGEN_PLACEHOLDER = 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=600';
 const TALLES_PRESET = ['S', 'M', 'L', 'XL', 'XXL'];
+const COLORES_PRESET: { nombre: string; hex: string }[] = [
+  { nombre: 'Negro', hex: '#111827' },
+  { nombre: 'Blanco', hex: '#f9fafb' },
+  { nombre: 'Gris', hex: '#9ca3af' },
+  { nombre: 'Rojo', hex: '#dc2626' },
+  { nombre: 'Azul', hex: '#2563eb' },
+  { nombre: 'Verde', hex: '#16a34a' },
+  { nombre: 'Amarillo', hex: '#eab308' },
+  { nombre: 'Naranja', hex: '#ea580c' }
+];
 const WHATSAPP_NUMERO = '5491159779643';
 const ROTACION_SERVICIOS_MS = 5000;
 
@@ -31,6 +41,7 @@ export default function Tienda({ productos, onGuardarProducto, onDeleteProducto,
   const [pPrecio, setPPrecio] = useState('');
   const [pImagenUrl, setPImagenUrl] = useState('');
   const [pTalles, setPTalles] = useState<string[]>([]);
+  const [pColores, setPColores] = useState<string[]>([]);
 
   // Estados de edición
   const [editandoId, setEditandoId] = useState<number | null>(null);
@@ -39,6 +50,7 @@ export default function Tienda({ productos, onGuardarProducto, onDeleteProducto,
   // Estado del modal de compra
   const [productoSeleccionado, setProductoSeleccionado] = useState<Producto | null>(null);
   const [talleElegido, setTalleElegido] = useState('');
+  const [colorElegido, setColorElegido] = useState('');
   const [cantidad, setCantidad] = useState(1);
 
   // Estados del banner de Servicios de Indumentaria
@@ -78,7 +90,8 @@ export default function Tienda({ productos, onGuardarProducto, onDeleteProducto,
       categoria: pCategoria.trim(),
       precio: Number(pPrecio),
       imagenUrl: pImagenUrl.trim() || IMAGEN_PLACEHOLDER,
-      talles: pTalles
+      talles: pTalles,
+      colores: pColores
     };
 
     try {
@@ -89,6 +102,7 @@ export default function Tienda({ productos, onGuardarProducto, onDeleteProducto,
       setPPrecio('');
       setPImagenUrl('');
       setPTalles([]);
+      setPColores([]);
       alert('¡Producto agregado a la tienda! 🛍️');
     } catch (err) {
       console.error('Error al guardar el producto en Firebase:', err);
@@ -210,12 +224,14 @@ export default function Tienda({ productos, onGuardarProducto, onDeleteProducto,
   const abrirCompra = (producto: Producto) => {
     setProductoSeleccionado(producto);
     setTalleElegido(producto.talles[0] || '');
+    setColorElegido(producto.colores[0] || '');
     setCantidad(1);
   };
 
   const cerrarCompra = () => {
     setProductoSeleccionado(null);
     setTalleElegido('');
+    setColorElegido('');
     setCantidad(1);
   };
 
@@ -231,6 +247,7 @@ export default function Tienda({ productos, onGuardarProducto, onDeleteProducto,
       `📦 Cantidad: ${cantidad}`
     ];
     if (talleElegido) lineas.push(`📏 Talle: ${talleElegido}`);
+    if (colorElegido) lineas.push(`🎨 Color: ${colorElegido}`);
     if (cantidad > 1) lineas.push(`💰 Total: ${formatPrecio(producto.precio * cantidad)}`);
     if (producto.descripcion) lineas.push('', producto.descripcion);
 
@@ -413,6 +430,27 @@ export default function Tienda({ productos, onGuardarProducto, onDeleteProducto,
               </div>
             </div>
 
+            <div>
+              <label className="block text-xs text-gray-400 mb-2">Colores disponibles:</label>
+              <div className="flex flex-wrap gap-2">
+                {COLORES_PRESET.map(color => (
+                  <button
+                    key={color.nombre}
+                    type="button"
+                    onClick={() => setPColores(toggleEnLista(pColores, color.nombre))}
+                    className={`flex items-center gap-1.5 pl-1.5 pr-3 h-9 text-xs font-bold rounded-md border transition-colors cursor-pointer ${
+                      pColores.includes(color.nombre)
+                        ? 'bg-[#05fcfe]/20 text-white border-[#05fcfe]'
+                        : 'bg-gray-900 text-gray-300 border-gray-700 hover:border-gray-500'
+                    }`}
+                  >
+                    <span className="w-4 h-4 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: color.hex }} />
+                    {color.nombre}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <button type="submit" className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded transition-colors cursor-pointer shadow-md">
               Agregar Producto
             </button>
@@ -471,6 +509,23 @@ export default function Tienda({ productos, onGuardarProducto, onDeleteProducto,
                       </button>
                     ))}
                   </div>
+                  <div className="flex flex-wrap gap-1">
+                    {COLORES_PRESET.map(color => (
+                      <button
+                        key={color.nombre}
+                        type="button"
+                        onClick={() => handleEditFormChange('colores', toggleEnLista(editForm.colores, color.nombre))}
+                        className={`flex items-center gap-1 pl-1 pr-2 h-7 text-[10px] font-bold rounded border transition-colors cursor-pointer ${
+                          editForm.colores.includes(color.nombre)
+                            ? 'bg-[#05fcfe]/20 text-white border-[#05fcfe]'
+                            : 'bg-gray-950 text-gray-300 border-gray-700 hover:border-gray-500'
+                        }`}
+                      >
+                        <span className="w-3 h-3 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: color.hex }} />
+                        {color.nombre}
+                      </button>
+                    ))}
+                  </div>
                   <div className="flex gap-2 pt-2">
                     <button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1 rounded text-xs transition-colors cursor-pointer">Guardar</button>
                     <button type="button" onClick={handleCancelarEdicion} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-1 rounded text-xs transition-colors cursor-pointer">Cancelar</button>
@@ -500,6 +555,9 @@ export default function Tienda({ productos, onGuardarProducto, onDeleteProducto,
                     <h4 className="text-base font-bold text-white mt-2 truncate">{producto.nombre}</h4>
                     {producto.talles.length > 0 && (
                       <p className="text-[10px] text-gray-500 mt-1">Talles: {producto.talles.join(' / ')}</p>
+                    )}
+                    {producto.colores.length > 0 && (
+                      <p className="text-[10px] text-gray-500 mt-1">Colores: {producto.colores.join(' / ')}</p>
                     )}
                   </div>
 
@@ -579,6 +637,32 @@ export default function Tienda({ productos, onGuardarProducto, onDeleteProducto,
                         {talle}
                       </button>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {productoSeleccionado.colores.length > 0 && (
+                <div>
+                  <label className="block text-xs text-gray-400 mb-2">Elegí tu color:</label>
+                  <div className="flex flex-wrap gap-2">
+                    {productoSeleccionado.colores.map(nombreColor => {
+                      const hex = COLORES_PRESET.find(c => c.nombre === nombreColor)?.hex || '#9ca3af';
+                      return (
+                        <button
+                          key={nombreColor}
+                          type="button"
+                          onClick={() => setColorElegido(nombreColor)}
+                          className={`flex items-center gap-1.5 pl-1.5 pr-3 h-9 text-xs font-bold rounded-md border transition-colors cursor-pointer ${
+                            colorElegido === nombreColor
+                              ? 'bg-[#05fcfe]/20 text-white border-[#05fcfe]'
+                              : 'bg-gray-900 text-gray-300 border-gray-700 hover:border-gray-500'
+                          }`}
+                        >
+                          <span className="w-4 h-4 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: hex }} />
+                          {nombreColor}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}

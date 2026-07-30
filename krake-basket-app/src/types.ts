@@ -124,6 +124,7 @@ export interface Producto {
   precio: number;
   imagenUrl: string;
   talles: string[]; // ej: ['S', 'M', 'L']
+  colores: string[]; // ej: ['Negro', 'Blanco']
 }
 
 export interface ServicioIndumentaria {

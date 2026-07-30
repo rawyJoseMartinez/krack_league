@@ -208,7 +208,8 @@ function App() {
           categoria: data.categoria || '',
           precio: Number(data.precio || 0),
           imagenUrl: data.imagenUrl || '',
-          talles: Array.isArray(data.talles) ? data.talles : []
+          talles: Array.isArray(data.talles) ? data.talles : [],
+          colores: Array.isArray(data.colores) ? data.colores : []
         };
       }) as Producto[];
       setProductos(datosProductos);
