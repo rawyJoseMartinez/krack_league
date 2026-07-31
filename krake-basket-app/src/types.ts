@@ -24,6 +24,12 @@ export interface Jugador {
 
 export type Conferencia = 'Este' | 'Oeste';
 
+export interface FotoEquipo {
+  id: number;
+  url: string;
+  desc: string;
+}
+
 export interface Equipo {
   id: number;
   nombre: string;
@@ -36,6 +42,7 @@ export interface Equipo {
   conf: string; // récord en conferencia, ej: "36-16"
   div: string; // récord en división, ej: "10-6"
   racha: string; // ej: "W3", "L1"
+  fotos?: FotoEquipo[];
 }
 
 export interface Partido {
@@ -47,6 +54,13 @@ export interface Partido {
   fecha: string;
   logoLocal?: string;
   logoVisitante?: string;
+}
+
+export interface LiderEquipo {
+  id: number;
+  equipo: string; // debe coincidir con el nombre usado en Partidos/Clasificación
+  liderNombre: string;
+  telefono: string; // dígitos con código de país, ej: 549...
 }
 
 export type PeriodoJuego = 'P1' | 'P2' | 'P3' | 'P4' | 'OT1' | 'OT2';
@@ -92,7 +106,6 @@ export interface QuienesData {
   titulo: string;
   descripcion: string;
   fotoUrl: string;
-  reglamentoUrl?: string;
 }
 
 export type EstadoFranja = 'reservado' | 'juego' | 'cerrado';

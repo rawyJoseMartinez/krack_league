@@ -16,7 +16,7 @@ import QuienesSomos from './Components/QuienesSomos';
 import CalendarioCancha from './Components/CalendarioCancha';
 import Login from './Components/Login';
 import ReproductorFondo from './Components/ReproductorFondo';
-import type { ArchivoGaleria, Sponsor, Jugador, Partido, Equipo, Boxscore, HomeData, QuienesData, Producto, ServicioIndumentaria } from './types';
+import type { ArchivoGaleria, Sponsor, Jugador, Partido, Equipo, Boxscore, HomeData, QuienesData, Producto, ServicioIndumentaria, LiderEquipo } from './types';
 
 function App() {
   const [currentSection, setCurrentSection] = useState<string>('home');
@@ -43,6 +43,7 @@ function App() {
   const [boxscores, setBoxscores] = useState<Boxscore[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [servicios, setServicios] = useState<ServicioIndumentaria[]>([]);
+  const [lideresEquipo, setLideresEquipo] = useState<LiderEquipo[]>([]);
 
   // 1. Escuchar la sección HOME en Firebase
   useEffect(() => {
@@ -172,7 +173,8 @@ function App() {
           gb: data.gb || '',
           conf: data.conf || '',
           div: data.div || '',
-          racha: data.racha || ''
+          racha: data.racha || '',
+          fotos: Array.isArray(data.fotos) ? data.fotos : []
         };
       }) as Equipo[];
       setEquipos(datosEquipos);
@@ -230,6 +232,23 @@ function App() {
         };
       }) as ServicioIndumentaria[];
       setServicios(datosServicios);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 11. NUEVO: Escuchar la colección de LÍDERES DE EQUIPO (avisos de partido por WhatsApp) en tiempo real desde Firebase
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'lideresEquipo'), (snapshot) => {
+      const datosLideres = snapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: Number(docSnap.id),
+          equipo: data.equipo || '',
+          liderNombre: data.liderNombre || '',
+          telefono: data.telefono || ''
+        };
+      }) as LiderEquipo[];
+      setLideresEquipo(datosLideres);
     });
     return () => unsubscribe();
   }, []);
@@ -293,6 +312,14 @@ function App() {
     await deleteDoc(doc(db, 'serviciosTienda', String(id)));
   };
 
+  const handleGuardarLiderInFirebase = async (lider: LiderEquipo) => {
+    await setDoc(doc(db, 'lideresEquipo', String(lider.id)), lider);
+  };
+
+  const handleDeleteLiderInFirebase = async (id: number) => {
+    await deleteDoc(doc(db, 'lideresEquipo', String(id)));
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans flex flex-col justify-between">
       <div className="w-full">
@@ -314,6 +341,9 @@ function App() {
               boxscores={boxscores}
               onGuardarBoxscore={handleGuardarBoxscoreInFirebase}
               onDeleteBoxscore={handleDeleteBoxscoreInFirebase}
+              lideresEquipo={lideresEquipo}
+              onGuardarLider={handleGuardarLiderInFirebase}
+              onDeleteLider={handleDeleteLiderInFirebase}
               isAdmin={isAdmin}
             />
           )}

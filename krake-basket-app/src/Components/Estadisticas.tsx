@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { Jugador, Partido, Equipo, Conferencia, Boxscore, JugadorBoxscore, StatsPeriodo, PeriodoJuego } from '../types';
+import type { Jugador, Partido, Equipo, Conferencia, Boxscore, JugadorBoxscore, StatsPeriodo, PeriodoJuego, LiderEquipo } from '../types';
 
 export interface EstadisticasProps {
   jugadores: Jugador[];
@@ -12,12 +12,15 @@ export interface EstadisticasProps {
   boxscores: Boxscore[];
   onGuardarBoxscore: (boxscore: Boxscore) => Promise<void>;
   onDeleteBoxscore: (id: number) => Promise<void>;
+  lideresEquipo: LiderEquipo[];
+  onGuardarLider: (lider: LiderEquipo) => Promise<void>;
+  onDeleteLider: (id: number) => Promise<void>;
   isAdmin: boolean;
 }
 
 const LOGO_PLACEHOLDER = 'https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=100';
 
-type SeccionEstadisticas = 'clasificacion' | 'partidos' | 'jugadores';
+type SeccionEstadisticas = 'clasificacion' | 'partidos' | 'jugadores' | 'equipos';
 type TabPeriodo = 'ALL' | PeriodoJuego;
 
 const PERIODOS: PeriodoJuego[] = ['P1', 'P2', 'P3', 'P4', 'OT1', 'OT2'];
@@ -40,7 +43,7 @@ const statsTotalesJugador = (jugador: JugadorBoxscore): StatsPeriodo =>
 
 const formatPct = (m: number, a: number) => (a === 0 ? '-' : `${Math.round((m / a) * 100)}%`);
 
-export default function Estadisticas({ jugadores, setJugadores, partidos, setPartidos, equipos, setEquipos, onDeleteEquipo, boxscores, onGuardarBoxscore, onDeleteBoxscore, isAdmin }: EstadisticasProps) {
+export default function Estadisticas({ jugadores, setJugadores, partidos, setPartidos, equipos, setEquipos, onDeleteEquipo, boxscores, onGuardarBoxscore, onDeleteBoxscore, lideresEquipo, onGuardarLider, onDeleteLider, isAdmin }: EstadisticasProps) {
   // Pestaña activa dentro del componente
   const [seccionActiva, setSeccionActiva] = useState<SeccionEstadisticas>('clasificacion');
 
@@ -84,12 +87,27 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
   
   const [pFecha, setPFecha] = useState('');
 
+  // Estados para el aviso de partido por WhatsApp al líder de cada equipo
+  const [partidoRecienCreado, setPartidoRecienCreado] = useState<Partido | null>(null);
+
+  // Estados para el formulario de Líderes de Equipo
+  const [lEquipo, setLEquipo] = useState('');
+  const [lLiderNombre, setLLiderNombre] = useState('');
+  const [lTelefono, setLTelefono] = useState('');
+  const [editandoLiderId, setEditandoLiderId] = useState<number | null>(null);
+  const [editLiderForm, setEditLiderForm] = useState<LiderEquipo | null>(null);
+
   // Estados para el Boxscore
   const [boxscoreAbierto, setBoxscoreAbierto] = useState<number | null>(null);
   const [periodoActivo, setPeriodoActivo] = useState<TabPeriodo>('ALL');
   const [boxscoreEdit, setBoxscoreEdit] = useState<JugadorBoxscore[] | null>(null);
   const [bxJugadorId, setBxJugadorId] = useState('');
   const [bxLado, setBxLado] = useState<'local' | 'visitante'>('local');
+
+  // Estados para la galería de fotos por Equipo
+  const [equipoGaleriaId, setEquipoGaleriaId] = useState<number | null>(null);
+  const [fotoUrl, setFotoUrl] = useState('');
+  const [fotoDesc, setFotoDesc] = useState('');
 
   // Sincroniza la copia editable del boxscore cada vez que se abre uno o cambian los datos de Firebase
   useEffect(() => {
@@ -190,6 +208,7 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
     setPtsVisitante('');
     setLogoVisitante('');
     setPFecha('');
+    setPartidoRecienCreado(nuevoPartido);
     alert("¡Partido guardado con éxito! 🏁");
   };
 
@@ -203,7 +222,90 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
   const handleDeletePartido = (id: number) => {
     if (window.confirm("¿Eliminar este registro de partido?")) {
       setPartidos(partidos.filter(p => p.id !== id));
+      if (partidoRecienCreado?.id === id) setPartidoRecienCreado(null);
     }
+  };
+
+  // --- LÍDERES DE EQUIPO (aviso de partido por WhatsApp) ---
+  const handleAddLider = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lEquipo.trim() || !lLiderNombre.trim() || !lTelefono.trim()) {
+      alert("Completa el equipo, el nombre del líder y su WhatsApp.");
+      return;
+    }
+
+    const nuevoLider: LiderEquipo = {
+      id: Date.now(),
+      equipo: lEquipo.trim(),
+      liderNombre: lLiderNombre.trim(),
+      telefono: lTelefono.trim()
+    };
+
+    try {
+      await onGuardarLider(nuevoLider);
+      setLEquipo('');
+      setLLiderNombre('');
+      setLTelefono('');
+    } catch (err) {
+      console.error('Error al guardar el líder de equipo en Firebase:', err);
+      alert("No se pudo guardar el líder de equipo. Revisa la consola (F12) para ver el error de Firebase.");
+    }
+  };
+
+  const handleIniciarEdicionLider = (lider: LiderEquipo) => {
+    setEditandoLiderId(lider.id);
+    setEditLiderForm({ ...lider });
+  };
+
+  const handleCancelarEdicionLider = () => {
+    setEditandoLiderId(null);
+    setEditLiderForm(null);
+  };
+
+  const handleGuardarEdicionLider = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editLiderForm || !editLiderForm.equipo.trim() || !editLiderForm.telefono.trim()) {
+      alert("El equipo y el WhatsApp no pueden estar vacíos.");
+      return;
+    }
+    try {
+      await onGuardarLider(editLiderForm);
+      setEditandoLiderId(null);
+      setEditLiderForm(null);
+    } catch (err) {
+      console.error('Error al actualizar el líder de equipo en Firebase:', err);
+      alert("No se pudo guardar la edición. Revisa la consola (F12) para ver el error de Firebase.");
+    }
+  };
+
+  const handleEditLiderFormChange = <K extends keyof LiderEquipo>(campo: K, valor: LiderEquipo[K]) => {
+    if (!editLiderForm) return;
+    setEditLiderForm({ ...editLiderForm, [campo]: valor });
+  };
+
+  const handleDeleteLider = async (id: number) => {
+    if (!window.confirm("¿Eliminar este líder de equipo?")) return;
+    try {
+      await onDeleteLider(id);
+      if (editandoLiderId === id) handleCancelarEdicionLider();
+    } catch (err) {
+      console.error('Error al eliminar el líder de equipo en Firebase:', err);
+      alert("No se pudo eliminar el líder de equipo. Revisa la consola (F12) para ver el error de Firebase.");
+    }
+  };
+
+  const handleAvisarLider = (equipoNombre: string, rival: string, fecha: string) => {
+    const lider = lideresEquipo.find(l => l.equipo.trim().toLowerCase() === equipoNombre.trim().toLowerCase());
+    if (!lider) return;
+
+    const mensaje = encodeURIComponent(
+      `Hola ${lider.liderNombre}! Te avisamos que se registró un partido para *${equipoNombre}*:\n\n` +
+      `🗓️ Fecha: ${fecha}\n` +
+      `🆚 Rival: ${rival}\n\n` +
+      `⚠️ Recordá que la inasistencia sin aviso previo implica el pago de la penalidad correspondiente según el Reglamento de la Krack League 3x3.\n\n` +
+      `¡Nos vemos en la cancha! 🏀`
+    );
+    window.open(`https://wa.me/${lider.telefono}?text=${mensaje}`, '_blank', 'noopener,noreferrer');
   };
 
   // Abrir/cerrar el panel de Boxscore de un partido
@@ -356,6 +458,60 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
 
   const jugadoresOrdenados = [...jugadores].sort((a, b) => b.puntos - a.puntos);
 
+  // Galería de fotos por Equipo
+  const equipoGaleria = equipos.find(eq => eq.id === equipoGaleriaId) || null;
+
+  const handleAgregarFoto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!equipoGaleriaId || !fotoUrl.trim()) {
+      alert("Selecciona un equipo y completa la URL de la foto.");
+      return;
+    }
+
+    const nuevaFoto = { id: Date.now(), url: fotoUrl.trim(), desc: fotoDesc.trim() };
+
+    try {
+      await setEquipos(equipos.map(eq =>
+        eq.id === equipoGaleriaId ? { ...eq, fotos: [...(eq.fotos || []), nuevaFoto] } : eq
+      ));
+      setFotoUrl('');
+      setFotoDesc('');
+    } catch (err) {
+      console.error('Error al guardar la foto en Firebase:', err);
+      alert("No se pudo guardar la foto. Revisa la consola (F12) para ver el error de Firebase.");
+    }
+  };
+
+  const handleEliminarFoto = async (equipoId: number, fotoId: number) => {
+    if (!window.confirm("¿Eliminar esta foto de la galería del equipo?")) return;
+    try {
+      await setEquipos(equipos.map(eq =>
+        eq.id === equipoId ? { ...eq, fotos: (eq.fotos || []).filter(f => f.id !== fotoId) } : eq
+      ));
+    } catch (err) {
+      console.error('Error al eliminar la foto en Firebase:', err);
+      alert("No se pudo eliminar la foto. Revisa la consola (F12) para ver el error de Firebase.");
+    }
+  };
+
+  const handleDescargarFoto = async (url: string, nombreArchivo: string) => {
+    try {
+      const respuesta = await fetch(url);
+      const blob = await respuesta.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = nombreArchivo;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      console.warn('No se pudo descargar la imagen directamente, se abre en una pestaña nueva.', err);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   return (
     <div className="space-y-12">
       {/* TÍTULO DE LA SECCIÓN */}
@@ -368,7 +524,8 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
         {([
           { id: 'clasificacion', label: '🏆 Clasificación' },
           { id: 'partidos', label: '🗓️ Partidos' },
-          { id: 'jugadores', label: '🏀 Jugadores' }
+          { id: 'jugadores', label: '🏀 Jugadores' },
+          { id: 'equipos', label: '🖼️ Equipos' }
         ] as { id: SeccionEstadisticas; label: string }[]).map((tab) => (
           <button
             key={tab.id}
@@ -614,241 +771,337 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
           </div>
         )}
 
-        {/* Listado de partidos */}
-        {partidos.length === 0 ? (
-          <div className="text-center py-6 text-gray-500 text-sm">No hay registros de encuentros disponibles.</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {partidos.map((partido) => {
-              const localGana = partido.puntosLocal > partido.puntosVisitante;
-              const empate = partido.puntosLocal === partido.puntosVisitante;
-              const imgLocal = partido.logoLocal || 'https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=100';
-              const imgVisitante = partido.logoVisitante || 'https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=100';
-
-              return (
-                <div key={partido.id} className="bg-gray-950 p-5 rounded-xl border border-gray-800 flex flex-col justify-between relative shadow-lg group hover:border-gray-700 transition-all">
-                  {isAdmin && (
-                    <button onClick={() => handleDeletePartido(partido.id)} className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white text-[10px] py-1 px-2 rounded cursor-pointer z-10">
-                      🗑️ Borrar
-                    </button>
-                  )}
-                  
-                  <div className="text-center text-[11px] text-gray-500 font-semibold mb-3 uppercase tracking-wider">
-                    📅 {partido.fecha}
-                  </div>
-
-                  <div className="flex items-center justify-between px-2">
-                    <div className="w-5/12 flex items-center justify-end space-x-3 min-w-0">
-                      <p className={`text-base font-bold truncate text-right ${localGana && !empate ? 'text-[#05fcfe]' : 'text-gray-400'}`}>
-                        {partido.equipoLocal}
-                      </p>
-                      <img src={imgLocal} alt={partido.equipoLocal} className="w-9 h-9 rounded-full object-cover border border-gray-800 shrink-0 bg-gray-900" />
-                    </div>
-
-                    <div className="w-2/12 flex items-center justify-center bg-gray-900 py-1.5 px-3 rounded-lg border border-gray-800 text-lg font-black text-white tracking-widest min-w-[70px] mx-2">
-                      <span className={localGana && !empate ? 'text-orange-400' : 'text-gray-300'}>{partido.puntosLocal}</span>
-                      <span className="text-gray-600 mx-1">-</span>
-                      <span className={!localGana && !empate ? 'text-orange-400' : 'text-gray-300'}>{partido.puntosVisitante}</span>
-                    </div>
-
-                    <div className="w-5/12 flex items-center justify-start space-x-3 min-w-0">
-                      <img src={imgVisitante} alt={partido.equipoVisitante} className="w-9 h-9 rounded-full object-cover border border-gray-800 shrink-0 bg-gray-900" />
-                      <p className={`text-base font-bold truncate text-left ${!localGana && !empate ? 'text-[#05fcfe]' : 'text-gray-400'}`}>
-                        {partido.equipoVisitante}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between px-2 mt-2 text-[10px] text-gray-600 font-semibold uppercase tracking-wider">
-                    <span className="w-5/12 text-right pr-12">🏠 Local</span>
-                    <span className="w-2/12"></span>
-                    <span className="w-5/12 text-left pl-12">🚀 Visitante</span>
-                  </div>
-
+        {/* Aviso por WhatsApp tras registrar un partido nuevo */}
+        {isAdmin && partidoRecienCreado && (
+          <div className="bg-emerald-950/30 border border-emerald-700 rounded-xl p-5 max-w-3xl mx-auto space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="text-sm font-bold text-emerald-400">📲 Avisar por WhatsApp a los equipos de este partido</h4>
+              <button onClick={() => setPartidoRecienCreado(null)} className="text-gray-400 hover:text-white text-xs cursor-pointer shrink-0">✕ Cerrar</button>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {[
+                { nombre: partidoRecienCreado.equipoLocal, rival: partidoRecienCreado.equipoVisitante },
+                { nombre: partidoRecienCreado.equipoVisitante, rival: partidoRecienCreado.equipoLocal }
+              ].map(({ nombre, rival }) => {
+                const tieneLider = lideresEquipo.some(l => l.equipo.trim().toLowerCase() === nombre.trim().toLowerCase());
+                return tieneLider ? (
                   <button
-                    onClick={() => handleToggleBoxscore(partido.id)}
-                    className={`mt-3 w-full text-xs font-bold py-1.5 rounded transition-colors cursor-pointer ${
-                      boxscoreAbierto === partido.id ? 'bg-[#05fcfe] text-gray-900' : 'bg-gray-800 hover:bg-gray-700 text-gray-200'
-                    }`}
+                    key={nombre}
+                    onClick={() => handleAvisarLider(nombre, rival, partidoRecienCreado.fecha)}
+                    className="bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-2 px-4 rounded-lg cursor-pointer transition-colors"
                   >
-                    📊 Boxscore
+                    📲 Avisar a {nombre}
                   </button>
-                </div>
-              );
-            })}
+                ) : (
+                  <span key={nombre} className="text-xs text-gray-500 bg-gray-900 border border-gray-800 rounded-lg py-2 px-4">
+                    {nombre}: sin líder cargado
+                  </span>
+                );
+              })}
+            </div>
           </div>
         )}
 
-        {/* ==================== PANEL DE BOXSCORE ==================== */}
-        {boxscorePartido && boxscoreEdit && (
-          <div className="bg-gray-950 border border-gray-800 rounded-xl shadow-lg overflow-hidden">
-            <div className="bg-gray-900 p-4 flex items-center justify-between gap-3 border-b border-gray-800 flex-wrap">
-              <div className="flex items-center gap-2 min-w-0">
-                <img src={boxscorePartido.logoLocal || LOGO_PLACEHOLDER} alt={boxscorePartido.equipoLocal} className="w-8 h-8 rounded-full object-cover bg-gray-800 border border-gray-800 shrink-0" />
-                <span className="font-bold text-white truncate">{boxscorePartido.equipoLocal}</span>
-              </div>
-              <div className="text-xl font-black text-[#05fcfe] shrink-0">{boxscorePartido.puntosLocal} - {boxscorePartido.puntosVisitante}</div>
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="font-bold text-white truncate">{boxscorePartido.equipoVisitante}</span>
-                <img src={boxscorePartido.logoVisitante || LOGO_PLACEHOLDER} alt={boxscorePartido.equipoVisitante} className="w-8 h-8 rounded-full object-cover bg-gray-800 border border-gray-800 shrink-0" />
-              </div>
-              <button onClick={() => setBoxscoreAbierto(null)} className="text-gray-400 hover:text-white text-xs cursor-pointer">✕ Cerrar</button>
-            </div>
+        {/* Gestión de Líderes de Equipo (Solo Admin) */}
+        {isAdmin && (
+          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 max-w-3xl mx-auto shadow-xl space-y-4">
+            <h4 className="text-xl font-bold text-[#05fcfe] text-center flex items-center justify-center gap-2">👤 Líderes de Equipo (avisos por WhatsApp)</h4>
 
-            {/* Pestañas de período */}
-            <div className="flex gap-1 p-3 bg-gray-900/60 overflow-x-auto border-b border-gray-800">
-              {(['ALL', ...PERIODOS] as TabPeriodo[]).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPeriodoActivo(p)}
-                  className={`px-3 py-1 text-xs font-bold rounded-md whitespace-nowrap transition-colors cursor-pointer ${
-                    periodoActivo === p ? 'bg-[#05fcfe] text-gray-900' : 'bg-gray-800 text-gray-300 hover:text-white'
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
+            {lideresEquipo.length === 0 ? (
+              <p className="text-xs text-gray-500 text-center">Todavía no cargaste ningún líder de equipo.</p>
+            ) : (
+              <div className="space-y-2">
+                {lideresEquipo.map(lider => {
+                  const enEdicion = editandoLiderId === lider.id && editLiderForm;
 
-            {isAdmin && periodoActivo === 'ALL' && (
-              <div className="px-4 py-2 bg-yellow-950/40 border-b border-yellow-800 text-yellow-400 text-xs">
-                ℹ️ "ALL" es de solo lectura y muestra el acumulado de todos los períodos. Para cargar minutos, puntos o tiros, seleccioná primero un período: P1, P2, P3, P4, OT1 u OT2.
-              </div>
-            )}
+                  if (enEdicion && editLiderForm) {
+                    return (
+                      <form key={lider.id} onSubmit={handleGuardarEdicionLider} className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-gray-900 border border-gray-700 rounded-lg p-3">
+                        <input type="text" value={editLiderForm.equipo} onChange={(e) => handleEditLiderFormChange('equipo', e.target.value)} placeholder="Equipo" className="p-1.5 text-xs rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" required />
+                        <input type="text" value={editLiderForm.liderNombre} onChange={(e) => handleEditLiderFormChange('liderNombre', e.target.value)} placeholder="Nombre del líder" className="p-1.5 text-xs rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
+                        <input type="text" value={editLiderForm.telefono} onChange={(e) => handleEditLiderFormChange('telefono', e.target.value)} placeholder="Ej: 5491122334455" className="p-1.5 text-xs rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" required />
+                        <div className="flex gap-2 sm:col-span-3">
+                          <button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1 rounded text-xs cursor-pointer">Guardar</button>
+                          <button type="button" onClick={handleCancelarEdicionLider} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-1 rounded text-xs cursor-pointer">Cancelar</button>
+                        </div>
+                      </form>
+                    );
+                  }
 
-            {/* Agregar jugador al boxscore (admin) */}
-            {isAdmin && (
-              <div className="p-4 bg-gray-900/40 border-b border-gray-800 flex flex-wrap items-end gap-3">
-                <div>
-                  <label className="block text-[10px] text-gray-400 mb-1">Jugador:</label>
-                  <select value={bxJugadorId} onChange={(e) => setBxJugadorId(e.target.value)} className="p-2 text-xs rounded bg-gray-900 border border-gray-700 text-white focus:outline-none min-w-[180px]">
-                    <option value="">Seleccionar...</option>
-                    {jugadores.map(j => (
-                      <option key={j.id} value={j.id}>{j.nombre} ({j.equipo})</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] text-gray-400 mb-1">Lado:</label>
-                  <select value={bxLado} onChange={(e) => setBxLado(e.target.value as 'local' | 'visitante')} className="p-2 text-xs rounded bg-gray-900 border border-gray-700 text-white focus:outline-none">
-                    <option value="local">🏠 {boxscorePartido.equipoLocal}</option>
-                    <option value="visitante">🚀 {boxscorePartido.equipoVisitante}</option>
-                  </select>
-                </div>
-                <button type="button" onClick={handleAgregarJugadorBoxscore} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 px-4 rounded cursor-pointer">
-                  ➕ Agregar al Boxscore
-                </button>
+                  return (
+                    <div key={lider.id} className="flex items-center gap-3 bg-gray-900 border border-gray-700 rounded-lg p-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-white truncate">{lider.equipo}</p>
+                        <p className="text-[11px] text-gray-400 truncate">{lider.liderNombre || 'Sin nombre'} · +{lider.telefono}</p>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <button onClick={() => handleIniciarEdicionLider(lider)} className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] py-1 px-2 rounded cursor-pointer">✏️</button>
+                        <button onClick={() => handleDeleteLider(lider.id)} className="bg-red-600 hover:bg-red-700 text-white text-[10px] py-1 px-2 rounded cursor-pointer">🗑️</button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
-            {(['local', 'visitante'] as const).map((lado) => {
-              const filas = boxscoreEdit.filter(j => j.lado === lado);
-              const totales = filas.reduce((acc, j) => sumarStats(acc, periodoActivo === 'ALL' ? statsTotalesJugador(j) : (j.periodos[periodoActivo] || statsVacias())), statsVacias());
-              const editable = isAdmin && periodoActivo !== 'ALL';
+            <form onSubmit={handleAddLider} className="bg-gray-900/60 border border-gray-800 rounded-lg p-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <input type="text" value={lEquipo} onChange={(e) => setLEquipo(e.target.value)} placeholder="Nombre del equipo" className="p-2 text-sm rounded bg-gray-950 border border-gray-700 text-white focus:outline-none focus:border-[#05fcfe]" required />
+              <input type="text" value={lLiderNombre} onChange={(e) => setLLiderNombre(e.target.value)} placeholder="Nombre del líder" className="p-2 text-sm rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
+              <input type="text" value={lTelefono} onChange={(e) => setLTelefono(e.target.value)} placeholder="WhatsApp (ej: 5491122334455)" className="p-2 text-sm rounded bg-gray-950 border border-gray-700 text-white focus:outline-none focus:border-[#05fcfe]" required />
+              <button type="submit" className="sm:col-span-3 bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 rounded transition-colors cursor-pointer text-sm">➕ Agregar Líder de Equipo</button>
+            </form>
+            <p className="text-[11px] text-gray-500 text-center">El nombre del equipo debe escribirse igual a como lo cargás en el partido (Local/Visitante), para que el sistema lo reconozca.</p>
+          </div>
+        )}
 
-              return (
-                <div key={lado} className="p-4 border-b border-gray-800 last:border-b-0">
-                  <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                    {lado === 'local' ? `🏠 ${boxscorePartido.equipoLocal}` : `🚀 ${boxscorePartido.equipoVisitante}`}
-                  </h5>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left whitespace-nowrap">
-                      <thead>
-                        <tr className="text-gray-500 uppercase tracking-wider border-b border-gray-800">
-                          <th className="py-2 px-2">Jugador</th>
-                          <th className="py-2 px-2 text-center">MIN</th>
-                          <th className="py-2 px-2 text-center">PTS</th>
-                          <th className="py-2 px-2 text-center">FG{editable ? '' : '%'}</th>
-                          <th className="py-2 px-2 text-center">3P{editable ? '' : '%'}</th>
-                          <th className="py-2 px-2 text-center">FT{editable ? '' : '%'}</th>
-                          {isAdmin && <th className="py-2 px-2 text-center"></th>}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filas.length === 0 ? (
-                          <tr><td colSpan={7} className="py-4 text-center text-gray-500">Sin jugadores cargados en este lado.</td></tr>
-                        ) : filas.map((j) => {
-                          const stats = periodoActivo === 'ALL' ? statsTotalesJugador(j) : (j.periodos[periodoActivo] || statsVacias());
-                          return (
-                            <tr key={j.jugadorId} className="border-b border-gray-800/60">
-                              <td className="py-2 px-2">
-                                <div className="flex items-center gap-2 min-w-[140px]">
-                                  <img src={j.foto || LOGO_PLACEHOLDER} alt={j.nombre} className="w-6 h-6 rounded-full object-cover bg-gray-900 shrink-0" />
-                                  <span className="text-white font-semibold truncate">{j.nombre}</span>
-                                </div>
-                              </td>
-                              {editable ? (
-                                <>
-                                  <td className="px-1"><input type="number" min="0" value={stats.min} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'min', Number(e.target.value))} className="w-12 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" /></td>
-                                  <td className="px-1"><input type="number" min="0" value={stats.pts} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'pts', Number(e.target.value))} className="w-12 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" /></td>
-                                  <td className="px-1">
-                                    <div className="flex items-center justify-center gap-1">
-                                      <input type="number" min="0" value={stats.fgM} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'fgM', Number(e.target.value))} className="w-8 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
-                                      <span className="text-gray-500">/</span>
-                                      <input type="number" min="0" value={stats.fgA} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'fgA', Number(e.target.value))} className="w-8 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
-                                    </div>
-                                  </td>
-                                  <td className="px-1">
-                                    <div className="flex items-center justify-center gap-1">
-                                      <input type="number" min="0" value={stats.tpM} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'tpM', Number(e.target.value))} className="w-8 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
-                                      <span className="text-gray-500">/</span>
-                                      <input type="number" min="0" value={stats.tpA} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'tpA', Number(e.target.value))} className="w-8 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
-                                    </div>
-                                  </td>
-                                  <td className="px-1">
-                                    <div className="flex items-center justify-center gap-1">
-                                      <input type="number" min="0" value={stats.ftM} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'ftM', Number(e.target.value))} className="w-8 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
-                                      <span className="text-gray-500">/</span>
-                                      <input type="number" min="0" value={stats.ftA} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'ftA', Number(e.target.value))} className="w-8 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
-                                    </div>
-                                  </td>
-                                </>
-                              ) : (
-                                <>
-                                  <td className="text-center px-2 text-gray-200">{stats.min}</td>
-                                  <td className="text-center px-2 font-bold text-orange-400">{stats.pts}</td>
-                                  <td className="text-center px-2 text-gray-300">{formatPct(stats.fgM, stats.fgA)}</td>
-                                  <td className="text-center px-2 text-gray-300">{formatPct(stats.tpM, stats.tpA)}</td>
-                                  <td className="text-center px-2 text-gray-300">{formatPct(stats.ftM, stats.ftA)}</td>
-                                </>
-                              )}
-                              {isAdmin && (
-                                <td className="px-2 text-center">
-                                  <button onClick={() => handleQuitarJugadorBoxscore(j.jugadorId)} className="text-red-500 hover:text-red-400 cursor-pointer">🗑️</button>
-                                </td>
-                              )}
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      {filas.length > 0 && (
-                        <tfoot>
-                          <tr className="border-t border-gray-700 bg-gray-900/60 font-bold">
-                            <td className="py-2 px-2 text-gray-300">TOTAL</td>
-                            <td className="text-center px-2 text-white">{totales.min}</td>
-                            <td className="text-center px-2 text-[#05fcfe]">{totales.pts}</td>
-                            <td className="text-center px-2 text-gray-300">{editable ? `${totales.fgM}/${totales.fgA}` : formatPct(totales.fgM, totales.fgA)}</td>
-                            <td className="text-center px-2 text-gray-300">{editable ? `${totales.tpM}/${totales.tpA}` : formatPct(totales.tpM, totales.tpA)}</td>
-                            <td className="text-center px-2 text-gray-300">{editable ? `${totales.ftM}/${totales.ftA}` : formatPct(totales.ftM, totales.ftA)}</td>
-                            {isAdmin && <td></td>}
-                          </tr>
-                        </tfoot>
-                      )}
-                    </table>
+        {/* Listado de Partidos (tabla compacta) + Boxscore al costado */}
+        {partidos.length === 0 ? (
+          <div className="text-center py-6 text-gray-500 text-sm">No hay registros de encuentros disponibles.</div>
+        ) : (
+          <div className="flex flex-col lg:flex-row gap-6 items-start">
+            {/* Tabla de partidos */}
+            <div className="w-full lg:w-2/5 bg-gray-950 border border-gray-800 rounded-xl shadow-lg overflow-x-auto">
+              <table className="w-full text-sm text-left whitespace-nowrap">
+                <thead>
+                  <tr className="text-gray-500 text-[11px] uppercase tracking-wider border-b border-gray-800">
+                    <th className="py-3 px-4">Fecha</th>
+                    <th className="py-3 px-2">Local</th>
+                    <th className="py-3 px-2 text-center">Marcador</th>
+                    <th className="py-3 px-2">Visitante</th>
+                    {isAdmin && <th className="py-3 px-2 text-center"></th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {partidos.map((partido) => {
+                    const localGana = partido.puntosLocal > partido.puntosVisitante;
+                    const empate = partido.puntosLocal === partido.puntosVisitante;
+                    const imgLocal = partido.logoLocal || LOGO_PLACEHOLDER;
+                    const imgVisitante = partido.logoVisitante || LOGO_PLACEHOLDER;
+                    const seleccionado = boxscoreAbierto === partido.id;
+
+                    return (
+                      <tr
+                        key={partido.id}
+                        onClick={() => handleToggleBoxscore(partido.id)}
+                        className={`cursor-pointer border-b border-gray-800/60 transition-colors ${
+                          seleccionado ? 'bg-gray-900' : 'hover:bg-gray-900/60'
+                        }`}
+                      >
+                        <td className="py-3 px-4 text-[11px] text-gray-500 font-semibold">{partido.fecha}</td>
+                        <td className="px-2">
+                          <div className="flex items-center gap-2 min-w-[110px]">
+                            <img src={imgLocal} alt={partido.equipoLocal} className="w-7 h-7 rounded-full object-cover border border-gray-800 shrink-0 bg-gray-900" />
+                            <span className={`font-semibold truncate text-sm ${localGana && !empate ? 'text-[#05fcfe]' : 'text-gray-300'}`}>
+                              {partido.equipoLocal}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="text-center px-2 font-black tracking-wide">
+                          <span className={localGana && !empate ? 'text-orange-400' : 'text-gray-300'}>{partido.puntosLocal}</span>
+                          <span className="text-gray-600 mx-1">-</span>
+                          <span className={!localGana && !empate ? 'text-orange-400' : 'text-gray-300'}>{partido.puntosVisitante}</span>
+                        </td>
+                        <td className="px-2">
+                          <div className="flex items-center gap-2 min-w-[110px]">
+                            <img src={imgVisitante} alt={partido.equipoVisitante} className="w-7 h-7 rounded-full object-cover border border-gray-800 shrink-0 bg-gray-900" />
+                            <span className={`font-semibold truncate text-sm ${!localGana && !empate ? 'text-[#05fcfe]' : 'text-gray-300'}`}>
+                              {partido.equipoVisitante}
+                            </span>
+                          </div>
+                        </td>
+                        {isAdmin && (
+                          <td className="px-2 text-center">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeletePartido(partido.id); }}
+                              className="bg-red-600 hover:bg-red-700 text-white text-[10px] py-1 px-2 rounded cursor-pointer"
+                            >
+                              🗑️
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ==================== PANEL DE BOXSCORE (AL COSTADO) ==================== */}
+            {boxscorePartido && boxscoreEdit ? (
+              <div className="w-full lg:w-3/5 bg-gray-950 border border-gray-800 rounded-xl shadow-lg overflow-hidden">
+                <div className="bg-gray-900 p-4 flex items-center justify-between gap-3 border-b border-gray-800 flex-wrap">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <img src={boxscorePartido.logoLocal || LOGO_PLACEHOLDER} alt={boxscorePartido.equipoLocal} className="w-8 h-8 rounded-full object-cover bg-gray-800 border border-gray-800 shrink-0" />
+                    <span className="font-bold text-white truncate">{boxscorePartido.equipoLocal}</span>
                   </div>
+                  <div className="text-xl font-black text-[#05fcfe] shrink-0">{boxscorePartido.puntosLocal} - {boxscorePartido.puntosVisitante}</div>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-bold text-white truncate">{boxscorePartido.equipoVisitante}</span>
+                    <img src={boxscorePartido.logoVisitante || LOGO_PLACEHOLDER} alt={boxscorePartido.equipoVisitante} className="w-8 h-8 rounded-full object-cover bg-gray-800 border border-gray-800 shrink-0" />
+                  </div>
+                  <button onClick={() => setBoxscoreAbierto(null)} className="text-gray-400 hover:text-white text-xs cursor-pointer">✕ Cerrar</button>
                 </div>
-              );
-            })}
 
-            {isAdmin && (
-              <div className="p-4 flex gap-3">
-                <button onClick={handleGuardarBoxscore} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 rounded transition-colors cursor-pointer">
-                  💾 Guardar Cambios del Boxscore
-                </button>
-                <button onClick={handleEliminarBoxscore} className="bg-gray-800 hover:bg-red-700 text-gray-300 hover:text-white text-sm font-bold py-2 px-4 rounded transition-colors cursor-pointer">
-                  🗑️ Eliminar Boxscore
-                </button>
+                {/* Pestañas de período */}
+                <div className="flex gap-1 p-3 bg-gray-900/60 overflow-x-auto border-b border-gray-800">
+                  {(['ALL', ...PERIODOS] as TabPeriodo[]).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setPeriodoActivo(p)}
+                      className={`px-3 py-1 text-xs font-bold rounded-md whitespace-nowrap transition-colors cursor-pointer ${
+                        periodoActivo === p ? 'bg-[#05fcfe] text-gray-900' : 'bg-gray-800 text-gray-300 hover:text-white'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+
+                {isAdmin && periodoActivo === 'ALL' && (
+                  <div className="px-4 py-2 bg-yellow-950/40 border-b border-yellow-800 text-yellow-400 text-xs">
+                    ℹ️ "ALL" es de solo lectura y muestra el acumulado de todos los períodos. Para cargar minutos, puntos o tiros, seleccioná primero un período: P1, P2, P3, P4, OT1 u OT2.
+                  </div>
+                )}
+
+                {/* Agregar jugador al boxscore (admin) */}
+                {isAdmin && (
+                  <div className="p-4 bg-gray-900/40 border-b border-gray-800 flex flex-wrap items-end gap-3">
+                    <div>
+                      <label className="block text-[10px] text-gray-400 mb-1">Jugador:</label>
+                      <select value={bxJugadorId} onChange={(e) => setBxJugadorId(e.target.value)} className="p-2 text-xs rounded bg-gray-900 border border-gray-700 text-white focus:outline-none min-w-[180px]">
+                        <option value="">Seleccionar...</option>
+                        {jugadores.map(j => (
+                          <option key={j.id} value={j.id}>{j.nombre} ({j.equipo})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-gray-400 mb-1">Lado:</label>
+                      <select value={bxLado} onChange={(e) => setBxLado(e.target.value as 'local' | 'visitante')} className="p-2 text-xs rounded bg-gray-900 border border-gray-700 text-white focus:outline-none">
+                        <option value="local">🏠 {boxscorePartido.equipoLocal}</option>
+                        <option value="visitante">🚀 {boxscorePartido.equipoVisitante}</option>
+                      </select>
+                    </div>
+                    <button type="button" onClick={handleAgregarJugadorBoxscore} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 px-4 rounded cursor-pointer">
+                      ➕ Agregar al Boxscore
+                    </button>
+                  </div>
+                )}
+
+                {(['local', 'visitante'] as const).map((lado) => {
+                  const filas = boxscoreEdit.filter(j => j.lado === lado);
+                  const totales = filas.reduce((acc, j) => sumarStats(acc, periodoActivo === 'ALL' ? statsTotalesJugador(j) : (j.periodos[periodoActivo] || statsVacias())), statsVacias());
+                  const editable = isAdmin && periodoActivo !== 'ALL';
+
+                  return (
+                    <div key={lado} className="p-4 border-b border-gray-800 last:border-b-0">
+                      <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                        {lado === 'local' ? `🏠 ${boxscorePartido.equipoLocal}` : `🚀 ${boxscorePartido.equipoVisitante}`}
+                      </h5>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs text-left whitespace-nowrap">
+                          <thead>
+                            <tr className="text-gray-500 uppercase tracking-wider border-b border-gray-800">
+                              <th className="py-2 px-2">Jugador</th>
+                              <th className="py-2 px-2 text-center">MIN</th>
+                              <th className="py-2 px-2 text-center">PTS</th>
+                              <th className="py-2 px-2 text-center">FG{editable ? '' : '%'}</th>
+                              <th className="py-2 px-2 text-center">3P{editable ? '' : '%'}</th>
+                              <th className="py-2 px-2 text-center">FT{editable ? '' : '%'}</th>
+                              {isAdmin && <th className="py-2 px-2 text-center"></th>}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filas.length === 0 ? (
+                              <tr><td colSpan={7} className="py-4 text-center text-gray-500">Sin jugadores cargados en este lado.</td></tr>
+                            ) : filas.map((j) => {
+                              const stats = periodoActivo === 'ALL' ? statsTotalesJugador(j) : (j.periodos[periodoActivo] || statsVacias());
+                              return (
+                                <tr key={j.jugadorId} className="border-b border-gray-800/60">
+                                  <td className="py-2 px-2">
+                                    <div className="flex items-center gap-2 min-w-[140px]">
+                                      <img src={j.foto || LOGO_PLACEHOLDER} alt={j.nombre} className="w-6 h-6 rounded-full object-cover bg-gray-900 shrink-0" />
+                                      <span className="text-white font-semibold truncate">{j.nombre}</span>
+                                    </div>
+                                  </td>
+                                  {editable ? (
+                                    <>
+                                      <td className="px-1"><input type="number" min="0" value={stats.min} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'min', Number(e.target.value))} className="w-12 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" /></td>
+                                      <td className="px-1"><input type="number" min="0" value={stats.pts} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'pts', Number(e.target.value))} className="w-12 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" /></td>
+                                      <td className="px-1">
+                                        <div className="flex items-center justify-center gap-1">
+                                          <input type="number" min="0" value={stats.fgM} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'fgM', Number(e.target.value))} className="w-8 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
+                                          <span className="text-gray-500">/</span>
+                                          <input type="number" min="0" value={stats.fgA} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'fgA', Number(e.target.value))} className="w-8 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
+                                        </div>
+                                      </td>
+                                      <td className="px-1">
+                                        <div className="flex items-center justify-center gap-1">
+                                          <input type="number" min="0" value={stats.tpM} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'tpM', Number(e.target.value))} className="w-8 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
+                                          <span className="text-gray-500">/</span>
+                                          <input type="number" min="0" value={stats.tpA} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'tpA', Number(e.target.value))} className="w-8 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
+                                        </div>
+                                      </td>
+                                      <td className="px-1">
+                                        <div className="flex items-center justify-center gap-1">
+                                          <input type="number" min="0" value={stats.ftM} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'ftM', Number(e.target.value))} className="w-8 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
+                                          <span className="text-gray-500">/</span>
+                                          <input type="number" min="0" value={stats.ftA} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'ftA', Number(e.target.value))} className="w-8 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
+                                        </div>
+                                      </td>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <td className="text-center px-2 text-gray-200">{stats.min}</td>
+                                      <td className="text-center px-2 font-bold text-orange-400">{stats.pts}</td>
+                                      <td className="text-center px-2 text-gray-300">{formatPct(stats.fgM, stats.fgA)}</td>
+                                      <td className="text-center px-2 text-gray-300">{formatPct(stats.tpM, stats.tpA)}</td>
+                                      <td className="text-center px-2 text-gray-300">{formatPct(stats.ftM, stats.ftA)}</td>
+                                    </>
+                                  )}
+                                  {isAdmin && (
+                                    <td className="px-2 text-center">
+                                      <button onClick={() => handleQuitarJugadorBoxscore(j.jugadorId)} className="text-red-500 hover:text-red-400 cursor-pointer">🗑️</button>
+                                    </td>
+                                  )}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                          {filas.length > 0 && (
+                            <tfoot>
+                              <tr className="border-t border-gray-700 bg-gray-900/60 font-bold">
+                                <td className="py-2 px-2 text-gray-300">TOTAL</td>
+                                <td className="text-center px-2 text-white">{totales.min}</td>
+                                <td className="text-center px-2 text-[#05fcfe]">{totales.pts}</td>
+                                <td className="text-center px-2 text-gray-300">{editable ? `${totales.fgM}/${totales.fgA}` : formatPct(totales.fgM, totales.fgA)}</td>
+                                <td className="text-center px-2 text-gray-300">{editable ? `${totales.tpM}/${totales.tpA}` : formatPct(totales.tpM, totales.tpA)}</td>
+                                <td className="text-center px-2 text-gray-300">{editable ? `${totales.ftM}/${totales.ftA}` : formatPct(totales.ftM, totales.ftA)}</td>
+                                {isAdmin && <td></td>}
+                              </tr>
+                            </tfoot>
+                          )}
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {isAdmin && (
+                  <div className="p-4 flex gap-3">
+                    <button onClick={handleGuardarBoxscore} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 rounded transition-colors cursor-pointer">
+                      💾 Guardar Cambios del Boxscore
+                    </button>
+                    <button onClick={handleEliminarBoxscore} className="bg-gray-800 hover:bg-red-700 text-gray-300 hover:text-white text-sm font-bold py-2 px-4 rounded transition-colors cursor-pointer">
+                      🗑️ Eliminar Boxscore
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="hidden lg:flex w-full lg:w-3/5 items-center justify-center text-center text-gray-500 text-sm py-16 border border-dashed border-gray-800 rounded-xl">
+                Seleccioná un partido para ver su boxscore.
               </div>
             )}
           </div>
@@ -1009,6 +1262,99 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
               </tbody>
             </table>
           </div>
+        )}
+      </div>
+      )}
+
+      {/* ==================== MÓDULO DE EQUIPOS (GALERÍA DE FOTOS) ==================== */}
+      {seccionActiva === 'equipos' && (
+      <div className="space-y-6">
+        <h3 className="text-2xl font-bold text-gray-100 flex items-center gap-2">🖼️ Galería de Equipos</h3>
+
+        {equipos.length === 0 ? (
+          <div className="text-center py-6 text-gray-500 text-sm">No hay equipos cargados todavía. Agregalos primero desde la pestaña Clasificación.</div>
+        ) : (
+          <>
+            {/* Selector de equipo */}
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {equipos.map(eq => (
+                <button
+                  key={eq.id}
+                  type="button"
+                  onClick={() => setEquipoGaleriaId(eq.id)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
+                    equipoGaleriaId === eq.id
+                      ? 'bg-[#05fcfe] text-gray-900 border-[#05fcfe]'
+                      : 'bg-gray-900 text-gray-300 border-gray-800 hover:border-gray-600'
+                  }`}
+                >
+                  <img src={eq.logo || LOGO_PLACEHOLDER} alt={eq.nombre} className="w-6 h-6 rounded-full object-cover bg-gray-950 shrink-0" />
+                  <span className="text-sm font-semibold">{eq.nombre}</span>
+                </button>
+              ))}
+            </div>
+
+            {!equipoGaleria ? (
+              <div className="text-center py-10 text-gray-500 text-sm">Seleccioná un equipo arriba para ver su galería de fotos.</div>
+            ) : (
+              <div className="bg-gray-950 border border-gray-800 rounded-xl p-6 space-y-6">
+                <div className="flex items-center gap-3">
+                  <img src={equipoGaleria.logo || LOGO_PLACEHOLDER} alt={equipoGaleria.nombre} className="w-12 h-12 rounded-full object-cover bg-gray-900 border border-gray-800 shrink-0" />
+                  <h4 className="text-xl font-bold text-white">{equipoGaleria.nombre}</h4>
+                </div>
+
+                {/* Formulario admin: agregar foto */}
+                {isAdmin && (
+                  <form onSubmit={handleAgregarFoto} className="bg-gray-900/60 border border-gray-800 rounded-lg p-4 space-y-3">
+                    <h5 className="text-sm font-bold text-[#05fcfe]">➕ Agregar Foto a {equipoGaleria.nombre}</h5>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">URL de la Imagen:</label>
+                      <input type="url" value={fotoUrl} onChange={(e) => setFotoUrl(e.target.value)} placeholder="https://enlace-de-imagen.jpg" className="w-full p-2 text-sm rounded bg-gray-950 border border-gray-700 text-white focus:outline-none focus:border-[#05fcfe]" required />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Descripción (opcional):</label>
+                      <input type="text" value={fotoDesc} onChange={(e) => setFotoDesc(e.target.value)} placeholder="Ej: Alejandro García - Encuentro de Naciones" className="w-full p-2 text-sm rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
+                    </div>
+                    <button type="submit" className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 rounded transition-colors cursor-pointer text-sm">
+                      Agregar Foto
+                    </button>
+                  </form>
+                )}
+
+                {/* Grid de fotos */}
+                {!equipoGaleria.fotos || equipoGaleria.fotos.length === 0 ? (
+                  <div className="text-center py-6 text-gray-500 text-sm">Este equipo todavía no tiene fotos cargadas.</div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {equipoGaleria.fotos.map(foto => (
+                      <div key={foto.id} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden relative group">
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleEliminarFoto(equipoGaleria.id, foto.id)}
+                            className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white text-[10px] py-1 px-2 rounded cursor-pointer z-10"
+                          >
+                            🗑️
+                          </button>
+                        )}
+                        <div className="w-full h-48 bg-gray-950 flex items-center justify-center overflow-hidden">
+                          <img src={foto.url} alt={foto.desc || equipoGaleria.nombre} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                        </div>
+                        <div className="p-3 space-y-2">
+                          {foto.desc && <p className="text-xs text-gray-300 truncate">{foto.desc}</p>}
+                          <button
+                            onClick={() => handleDescargarFoto(foto.url, `${equipoGaleria.nombre}-${foto.id}.jpg`)}
+                            className="w-full text-center bg-[#05fcfe] hover:bg-cyan-400 text-black font-bold text-xs py-2 rounded-lg transition-colors cursor-pointer"
+                          >
+                            ⬇️ Descargar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
       )}
