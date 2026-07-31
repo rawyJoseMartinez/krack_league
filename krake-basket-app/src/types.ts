@@ -92,6 +92,7 @@ export interface QuienesData {
   titulo: string;
   descripcion: string;
   fotoUrl: string;
+  reglamentoUrl?: string;
 }
 
 export type EstadoFranja = 'reservado' | 'juego' | 'cerrado';

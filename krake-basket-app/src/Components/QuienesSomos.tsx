@@ -15,6 +15,7 @@ export default function QuienesSomos({ data, sponsors, isAdmin }: QuienesSomosPr
   const [titulo, setTitulo] = useState(data.titulo);
   const [descripcion, setDescripcion] = useState(data.descripcion);
   const [fotoUrl, setFotoUrl] = useState(data.fotoUrl);
+  const [reglamentoUrl, setReglamentoUrl] = useState(data.reglamentoUrl || '');
 
   // Estados para el formulario de Sponsors
   const [sponsorNombre, setSponsorNombre] = useState('');
@@ -27,6 +28,7 @@ export default function QuienesSomos({ data, sponsors, isAdmin }: QuienesSomosPr
       setTitulo(data.titulo);
       setDescripcion(data.descripcion);
       setFotoUrl(data.fotoUrl);
+      setReglamentoUrl(data.reglamentoUrl || '');
     }
     setEditMode(!editMode);
   };
@@ -38,7 +40,8 @@ export default function QuienesSomos({ data, sponsors, isAdmin }: QuienesSomosPr
       await setDoc(doc(db, 'quienes', 'principal'), {
         titulo,
         descripcion,
-        fotoUrl
+        fotoUrl,
+        reglamentoUrl: reglamentoUrl.trim()
       });
       setEditMode(false);
       alert("¡Sección 'Quiénes Somos' actualizada con éxito! 🏀");
@@ -117,6 +120,11 @@ export default function QuienesSomos({ data, sponsors, isAdmin }: QuienesSomosPr
             <label className="block text-sm font-semibold text-gray-300 mb-1">URL de Imagen Lateral:</label>
             <input type="url" value={fotoUrl} onChange={(e) => setFotoUrl(e.target.value)} className="w-full p-2 rounded bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-[#05fcfe]" required />
           </div>
+          <div className="border-t border-gray-700 pt-4">
+            <label className="block text-sm font-semibold text-gray-300 mb-1">URL del PDF de Reglamento (opcional):</label>
+            <input type="url" value={reglamentoUrl} onChange={(e) => setReglamentoUrl(e.target.value)} placeholder="https://enlace-al-reglamento.pdf" className="w-full p-2 rounded bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-[#05fcfe]" />
+            <p className="text-[11px] text-gray-500 mt-1">Si subís el PDF a Google Drive, compartilo como público y usá el link de vista previa (formato .../file/d/ID/preview), no el link normal de "Compartir", para que se vea embebido en la página.</p>
+          </div>
           <button type="submit" className="w-full bg-[#05fcfe] text-black font-bold py-2 px-4 rounded hover:bg-cyan-400 transition-colors cursor-pointer">
             💾 Guardar Cambios en la Nube
           </button>
@@ -176,6 +184,36 @@ export default function QuienesSomos({ data, sponsors, isAdmin }: QuienesSomosPr
                 YouTube
               </a>
             </div>
+          </div>
+
+          {/* ======================================================= */}
+          {/* PANEL DE REGLAMENTO (PDF) */}
+          {/* ======================================================= */}
+          <div className="bg-gray-950 border border-gray-800 rounded-2xl p-6 md:p-8 shadow-xl space-y-4">
+            <div className="text-center">
+              <h3 className="text-xl font-bold text-white uppercase tracking-wider">📄 Reglamento Krack League 3x3</h3>
+              <p className="text-sm text-gray-400 mt-1">Consultá las reglas oficiales del torneo.</p>
+            </div>
+
+            {data.reglamentoUrl ? (
+              <div className="space-y-3">
+                <div className="w-full h-[70vh] rounded-xl overflow-hidden border border-gray-800 bg-gray-900">
+                  <iframe src={data.reglamentoUrl} title="Reglamento Krack League 3x3" className="w-full h-full" />
+                </div>
+                <div className="text-center">
+                  <a
+                    href={data.reglamentoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 bg-[#05fcfe] hover:bg-cyan-400 text-black font-bold text-sm py-2 px-5 rounded-lg transition-colors"
+                  >
+                    📄 Abrir en una pestaña nueva
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <p className="text-center text-gray-500 text-sm py-6">El reglamento todavía no fue cargado.</p>
+            )}
           </div>
         </div>
       )}
