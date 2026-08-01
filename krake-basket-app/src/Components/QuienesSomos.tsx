@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../Firebase';
 import { doc, setDoc, collection, addDoc, query, where, getDocs, deleteDoc } from 'firebase/firestore';
-import type { Sponsor, QuienesData } from '../types';
+import type { Sponsor, QuienesData, FotoHistoria } from '../types';
 
 interface QuienesSomosProps {
   data: QuienesData;
@@ -10,17 +10,34 @@ interface QuienesSomosProps {
 }
 
 const REGLAMENTO_URL = '/reglamento-krack-3x3.pdf';
+const ROTACION_MS = 6000;
 
 export default function QuienesSomos({ data, sponsors, isAdmin }: QuienesSomosProps) {
   // Estados para la sección Historia
   const [editMode, setEditMode] = useState(false);
   const [titulo, setTitulo] = useState(data.titulo);
   const [descripcion, setDescripcion] = useState(data.descripcion);
-  const [fotoUrl, setFotoUrl] = useState(data.fotoUrl);
+  const [fotos, setFotos] = useState<FotoHistoria[]>(data.fotos);
+  const [nuevaFotoUrl, setNuevaFotoUrl] = useState('');
+
+  // Carrusel: imagen activa en la vista pública
+  const [slideActivo, setSlideActivo] = useState(0);
 
   // Estados para el formulario de Sponsors
   const [sponsorNombre, setSponsorNombre] = useState('');
   const [sponsorLogo, setSponsorLogo] = useState('');
+
+  useEffect(() => {
+    if (editMode || data.fotos.length <= 1) return;
+    const timer = setInterval(() => {
+      setSlideActivo(prev => (prev + 1) % data.fotos.length);
+    }, ROTACION_MS);
+    return () => clearInterval(timer);
+  }, [editMode, data.fotos.length]);
+
+  useEffect(() => {
+    if (slideActivo >= data.fotos.length) setSlideActivo(0);
+  }, [data.fotos.length, slideActivo]);
 
   // Cargar los datos vigentes de Firebase en el formulario recién al abrir la edición,
   // para no pisar lo que el admin está tipeando si llega una actualización en tiempo real.
@@ -28,19 +45,36 @@ export default function QuienesSomos({ data, sponsors, isAdmin }: QuienesSomosPr
     if (!editMode) {
       setTitulo(data.titulo);
       setDescripcion(data.descripcion);
-      setFotoUrl(data.fotoUrl);
+      setFotos(data.fotos);
     }
     setEditMode(!editMode);
+  };
+
+  const handleAgregarFoto = () => {
+    if (!nuevaFotoUrl.trim()) {
+      alert("Por favor ingresa una URL válida.");
+      return;
+    }
+    setFotos([...fotos, { id: Date.now(), url: nuevaFotoUrl.trim() }]);
+    setNuevaFotoUrl('');
+  };
+
+  const handleQuitarFoto = (id: number) => {
+    setFotos(fotos.filter(f => f.id !== id));
   };
 
   // Guardar cambios en la Historia
   const handleSaveHistoria = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (fotos.length === 0) {
+      alert("Agrega al menos una imagen antes de guardar.");
+      return;
+    }
     try {
       await setDoc(doc(db, 'quienes', 'principal'), {
         titulo,
         descripcion,
-        fotoUrl
+        fotos
       });
       setEditMode(false);
       alert("¡Sección 'Quiénes Somos' actualizada con éxito! 🏀");
@@ -115,9 +149,28 @@ export default function QuienesSomos({ data, sponsors, isAdmin }: QuienesSomosPr
             <label className="block text-sm font-semibold text-gray-300 mb-1">Descripción / Historia:</label>
             <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={5} className="w-full p-2 rounded bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-[#05fcfe]" required />
           </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-1">URL de Imagen Lateral:</label>
-            <input type="url" value={fotoUrl} onChange={(e) => setFotoUrl(e.target.value)} className="w-full p-2 rounded bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-[#05fcfe]" required />
+          <div className="border-t border-gray-700 pt-4 space-y-3">
+            <label className="block text-sm font-semibold text-gray-300">Imágenes del Carrusel Lateral:</label>
+
+            {fotos.length === 0 ? (
+              <p className="text-xs text-gray-500 text-center py-2">Todavía no agregaste ninguna imagen.</p>
+            ) : (
+              <div className="space-y-2">
+                {fotos.map((f, idx) => (
+                  <div key={f.id} className="flex items-center gap-2 bg-gray-900 border border-gray-700 rounded p-2">
+                    <span className="text-xs text-gray-500 w-5 text-center">{idx + 1}</span>
+                    <img src={f.url} alt="" className="w-8 h-8 rounded object-cover bg-gray-950 shrink-0" />
+                    <span className="text-xs text-gray-300 truncate flex-1">{f.url}</span>
+                    <button type="button" onClick={() => handleQuitarFoto(f.id)} className="text-red-500 hover:text-red-400 text-xs font-bold cursor-pointer shrink-0">✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="bg-gray-900/60 border border-gray-800 rounded p-3 flex gap-2">
+              <input type="url" value={nuevaFotoUrl} onChange={(e) => setNuevaFotoUrl(e.target.value)} placeholder="https://enlace-de-imagen.jpg" className="flex-1 p-2 text-sm rounded bg-gray-950 border border-gray-700 text-white focus:outline-none focus:border-[#05fcfe]" />
+              <button type="button" onClick={handleAgregarFoto} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 rounded cursor-pointer shrink-0">➕ Agregar</button>
+            </div>
           </div>
           <button type="submit" className="w-full bg-[#05fcfe] text-black font-bold py-2 px-4 rounded hover:bg-cyan-400 transition-colors cursor-pointer">
             💾 Guardar Cambios en la Nube
@@ -132,8 +185,30 @@ export default function QuienesSomos({ data, sponsors, isAdmin }: QuienesSomosPr
                 {data.descripcion}
               </p>
             </div>
-            <div className="w-full h-80 rounded-xl overflow-hidden shadow-lg border border-gray-800">
-              <img src={data.fotoUrl} alt="Krack League staff" className="w-full h-full object-cover" />
+            <div className="relative w-full h-80 rounded-xl overflow-hidden shadow-lg border border-gray-800">
+              {data.fotos.map((foto, idx) => (
+                <div
+                  key={foto.id}
+                  className={`absolute inset-0 transition-opacity duration-1000 ${idx === slideActivo ? 'opacity-100' : 'opacity-0'}`}
+                >
+                  <img src={foto.url} alt="Krack League staff" className="w-full h-full object-cover" />
+                </div>
+              ))}
+
+              {data.fotos.length === 0 && <div className="absolute inset-0 bg-gray-900" />}
+
+              {data.fotos.length > 1 && (
+                <div className="absolute bottom-3 left-0 right-0 z-10 flex justify-center gap-2">
+                  {data.fotos.map((f, idx) => (
+                    <button
+                      key={f.id}
+                      onClick={() => setSlideActivo(idx)}
+                      className={`w-2.5 h-2.5 rounded-full transition-colors cursor-pointer ${idx === slideActivo ? 'bg-[#05fcfe]' : 'bg-white/40 hover:bg-white/70'}`}
+                      aria-label={`Ir a la imagen ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

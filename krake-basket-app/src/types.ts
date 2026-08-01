@@ -54,6 +54,7 @@ export interface Partido {
   fecha: string;
   logoLocal?: string;
   logoVisitante?: string;
+  jornada?: string; // ej: "Jornada 1"
 }
 
 export interface LiderEquipo {
@@ -102,10 +103,16 @@ export interface HomeData {
   banners: HomeBanner[];
 }
 
+export interface FotoHistoria {
+  id: number;
+  url: string;
+}
+
 export interface QuienesData {
   titulo: string;
   descripcion: string;
-  fotoUrl: string;
+  fotoUrl: string; // legacy: se conserva para migrar datos viejos a "fotos"
+  fotos: FotoHistoria[];
 }
 
 export type EstadoFranja = 'reservado' | 'juego' | 'cerrado';

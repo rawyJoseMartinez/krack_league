@@ -12,7 +12,26 @@ export interface TiendaProps {
 }
 
 const IMAGEN_PLACEHOLDER = 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=600';
-const TALLES_PRESET = ['S', 'M', 'L', 'XL', 'XXL'];
+const TALLES_ADULTOS = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+const TALLES_NINOS = ['6', '8', '10', '12', '14', '16'];
+const TALLES_PRESET = [...TALLES_ADULTOS, ...TALLES_NINOS];
+
+// Ancho y alto en cm de cada talle, según la tabla de medidas de la tienda
+const MEDIDAS_TALLE: Record<string, { ancho: number; alto: number }> = {
+  '6': { ancho: 39, alto: 59 },
+  '8': { ancho: 41, alto: 61 },
+  '10': { ancho: 43, alto: 64 },
+  '12': { ancho: 46, alto: 66 },
+  '14': { ancho: 48, alto: 68 },
+  '16': { ancho: 50, alto: 70 },
+  S: { ancho: 55, alto: 79 },
+  M: { ancho: 57, alto: 81 },
+  L: { ancho: 60, alto: 83 },
+  XL: { ancho: 62, alto: 85 },
+  XXL: { ancho: 64, alto: 87 },
+  XXXL: { ancho: 66, alto: 89 }
+};
+
 const COLORES_PRESET: { nombre: string; hex: string }[] = [
   { nombre: 'Negro', hex: '#111827' },
   { nombre: 'Blanco', hex: '#f9fafb' },
@@ -249,7 +268,10 @@ export default function Tienda({ productos, onGuardarProducto, onDeleteProducto,
       `💲 ${formatPrecio(producto.precio)}`,
       `📦 Cantidad: ${cantidad}`
     ];
-    if (talleElegido) lineas.push(`📏 Talle: ${talleElegido}`);
+    if (talleElegido) {
+      const medida = MEDIDAS_TALLE[talleElegido];
+      lineas.push(`📏 Talle: ${talleElegido}${medida ? ` (${medida.ancho}x${medida.alto}cm)` : ''}`);
+    }
     if (colorElegido) lineas.push(`🎨 Color: ${colorElegido}`);
     if (cantidad > 1) lineas.push(`💰 Total: ${formatPrecio(producto.precio * cantidad)}`);
     if (producto.descripcion) lineas.push('', producto.descripcion);
@@ -413,23 +435,46 @@ export default function Tienda({ productos, onGuardarProducto, onDeleteProducto,
               <textarea value={pDescripcion} onChange={(e) => setPDescripcion(e.target.value)} placeholder="Detalles del producto, material, etc." rows={2} className="w-full p-2 text-sm rounded bg-gray-900 border border-gray-700 text-white focus:outline-none resize-none" />
             </div>
 
-            <div>
-              <label className="block text-xs text-gray-400 mb-2">Talles disponibles:</label>
-              <div className="flex flex-wrap gap-2">
-                {TALLES_PRESET.map(talle => (
-                  <button
-                    key={talle}
-                    type="button"
-                    onClick={() => setPTalles(toggleEnLista(pTalles, talle))}
-                    className={`w-11 h-9 text-xs font-bold rounded-md border transition-colors cursor-pointer ${
-                      pTalles.includes(talle)
-                        ? 'bg-[#05fcfe] text-gray-900 border-[#05fcfe]'
-                        : 'bg-gray-900 text-gray-300 border-gray-700 hover:border-gray-500'
-                    }`}
-                  >
-                    {talle}
-                  </button>
-                ))}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-2">Talles Adultos:</label>
+                <div className="flex flex-wrap gap-2">
+                  {TALLES_ADULTOS.map(talle => (
+                    <button
+                      key={talle}
+                      type="button"
+                      onClick={() => setPTalles(toggleEnLista(pTalles, talle))}
+                      className={`flex flex-col items-center justify-center w-14 h-12 text-xs font-bold rounded-md border transition-colors cursor-pointer ${
+                        pTalles.includes(talle)
+                          ? 'bg-[#05fcfe] text-gray-900 border-[#05fcfe]'
+                          : 'bg-gray-900 text-gray-300 border-gray-700 hover:border-gray-500'
+                      }`}
+                    >
+                      <span>{talle}</span>
+                      <span className={`text-[9px] font-normal ${pTalles.includes(talle) ? 'text-gray-800' : 'text-gray-100'}`}>{MEDIDAS_TALLE[talle].ancho}x{MEDIDAS_TALLE[talle].alto}cm</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-2">Talles Niños:</label>
+                <div className="flex flex-wrap gap-2">
+                  {TALLES_NINOS.map(talle => (
+                    <button
+                      key={talle}
+                      type="button"
+                      onClick={() => setPTalles(toggleEnLista(pTalles, talle))}
+                      className={`flex flex-col items-center justify-center w-14 h-12 text-xs font-bold rounded-md border transition-colors cursor-pointer ${
+                        pTalles.includes(talle)
+                          ? 'bg-[#05fcfe] text-gray-900 border-[#05fcfe]'
+                          : 'bg-gray-900 text-gray-300 border-gray-700 hover:border-gray-500'
+                      }`}
+                    >
+                      <span>{talle}</span>
+                      <span className={`text-[9px] font-normal ${pTalles.includes(talle) ? 'text-gray-800' : 'text-gray-100'}`}>{MEDIDAS_TALLE[talle].ancho}x{MEDIDAS_TALLE[talle].alto}cm</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -634,16 +679,24 @@ export default function Tienda({ productos, onGuardarProducto, onDeleteProducto,
                         key={talle}
                         type="button"
                         onClick={() => setTalleElegido(talle)}
-                        className={`w-11 h-9 text-xs font-bold rounded-md border transition-colors cursor-pointer ${
+                        className={`flex flex-col items-center justify-center w-14 h-12 text-xs font-bold rounded-md border transition-colors cursor-pointer ${
                           talleElegido === talle
                             ? 'bg-[#05fcfe] text-gray-900 border-[#05fcfe]'
                             : 'bg-gray-900 text-gray-300 border-gray-700 hover:border-gray-500'
                         }`}
                       >
-                        {talle}
+                        <span>{talle}</span>
+                        {MEDIDAS_TALLE[talle] && (
+                          <span className={`text-[9px] font-normal ${talleElegido === talle ? 'text-gray-800' : 'text-gray-100'}`}>{MEDIDAS_TALLE[talle].ancho}x{MEDIDAS_TALLE[talle].alto}cm</span>
+                        )}
                       </button>
                     ))}
                   </div>
+                  {talleElegido && MEDIDAS_TALLE[talleElegido] && (
+                    <p className="text-[11px] text-gray-500 mt-2">
+                      📏 Medidas del talle {talleElegido}: {MEDIDAS_TALLE[talleElegido].ancho}cm de ancho x {MEDIDAS_TALLE[talleElegido].alto}cm de alto.
+                    </p>
+                  )}
                 </div>
               )}
 

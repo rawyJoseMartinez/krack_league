@@ -76,12 +76,25 @@ function App() {
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, 'quienes', 'principal'), (docSnap) => {
       if (docSnap.exists()) {
-        setQuienesData(docSnap.data() as QuienesData);
+        const data = docSnap.data();
+        // Migración: los documentos viejos guardaban una única "fotoUrl" en vez de "fotos"
+        const fotos = Array.isArray(data.fotos)
+          ? data.fotos
+          : data.fotoUrl
+            ? [{ id: 1, url: data.fotoUrl }]
+            : [];
+        setQuienesData({
+          titulo: data.titulo || '',
+          descripcion: data.descripcion || '',
+          fotoUrl: data.fotoUrl || '',
+          fotos
+        } as QuienesData);
       } else {
         setQuienesData({
           titulo: "Nuestra Historia",
           descripcion: "Krack League nació con la pasión de llevar el básquetbol amateur al siguiente nivel, ofreciendo estadísticas profesionales y una experiencia única para cada jugador.",
-          fotoUrl: "https://images.unsplash.com/photo-1519766304817-4f37bda74a27?q=80&w=1200"
+          fotoUrl: "",
+          fotos: [{ id: 1, url: "https://images.unsplash.com/photo-1519766304817-4f37bda74a27?q=80&w=1200" }]
         });
       }
     });
@@ -149,7 +162,8 @@ function App() {
           puntosVisitante: Number(data.puntosVisitante || 0),
           fecha: data.fecha || '',
           logoLocal: data.logoLocal || '',
-          logoVisitante: data.logoVisitante || ''
+          logoVisitante: data.logoVisitante || '',
+          jornada: data.jornada || ''
         };
       }) as Partido[];
       setPartidos(datosPartidos);
@@ -257,17 +271,15 @@ function App() {
   const handleSetJugadoresInFirebase = async (nuevosJugadoresOrFn: Jugador[] | ((prev: Jugador[]) => Jugador[])) => {
     // Resolver si viene como función funcional (prev => ...) o array directo
     const resolvedJugadores = typeof nuevosJugadoresOrFn === 'function' ? nuevosJugadoresOrFn(jugadores) : nuevosJugadoresOrFn;
-    
-    // Si la lista está vacía (por ejemplo, al borrar el último jugador)
-    if (resolvedJugadores.length === 0 && jugadores.length === 1) {
-      // Nota: Para borrar registros individuales de manera óptima lo ideal es usar deleteDoc directamente en Estadisticas.tsx,
-      // pero esto sirve como puente directo para mantener la compatibilidad con tu setJugadores actual.
-    }
-    
+
     // Guardar/actualizar de manera interactiva el cambio en Firebase mapeando los ids como strings de documentos
     for (const j of resolvedJugadores) {
       await setDoc(doc(db, 'jugadores', String(j.id)), j);
     }
+  };
+
+  const handleDeleteJugadorInFirebase = async (id: number) => {
+    await deleteDoc(doc(db, 'jugadores', String(id)));
   };
 
   const handleSetPartidosInFirebase = async (nuevosPartidosOrFn: Partido[] | ((prev: Partido[]) => Partido[])) => {
@@ -275,6 +287,10 @@ function App() {
     for (const p of resolvedPartidos) {
       await setDoc(doc(db, 'partidos', String(p.id)), p);
     }
+  };
+
+  const handleDeletePartidoInFirebase = async (id: number) => {
+    await deleteDoc(doc(db, 'partidos', String(id)));
   };
 
   const handleSetEquiposInFirebase = async (nuevosEquiposOrFn: Equipo[] | ((prev: Equipo[]) => Equipo[])) => {
@@ -333,8 +349,10 @@ function App() {
               jugadores={jugadores}
               // Pasamos funciones controladas que apunten a los datos en vez de alterar el estado local instantáneamente
               setJugadores={handleSetJugadoresInFirebase}
+              onDeleteJugador={handleDeleteJugadorInFirebase}
               partidos={partidos}
               setPartidos={handleSetPartidosInFirebase}
+              onDeletePartido={handleDeletePartidoInFirebase}
               equipos={equipos}
               setEquipos={handleSetEquiposInFirebase}
               onDeleteEquipo={handleDeleteEquipoInFirebase}

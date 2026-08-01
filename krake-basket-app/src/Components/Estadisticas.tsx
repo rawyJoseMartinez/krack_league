@@ -4,8 +4,10 @@ import type { Jugador, Partido, Equipo, Conferencia, Boxscore, JugadorBoxscore, 
 export interface EstadisticasProps {
   jugadores: Jugador[];
   setJugadores: React.Dispatch<React.SetStateAction<Jugador[]>>;
+  onDeleteJugador: (id: number) => Promise<void>;
   partidos: Partido[];
   setPartidos: React.Dispatch<React.SetStateAction<Partido[]>>;
+  onDeletePartido: (id: number) => Promise<void>;
   equipos: Equipo[];
   setEquipos: (nuevosEquiposOrFn: Equipo[] | ((prev: Equipo[]) => Equipo[])) => Promise<void>;
   onDeleteEquipo: (id: number) => Promise<void>;
@@ -43,7 +45,7 @@ const statsTotalesJugador = (jugador: JugadorBoxscore): StatsPeriodo =>
 
 const formatPct = (m: number, a: number) => (a === 0 ? '-' : `${Math.round((m / a) * 100)}%`);
 
-export default function Estadisticas({ jugadores, setJugadores, partidos, setPartidos, equipos, setEquipos, onDeleteEquipo, boxscores, onGuardarBoxscore, onDeleteBoxscore, lideresEquipo, onGuardarLider, onDeleteLider, isAdmin }: EstadisticasProps) {
+export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador, partidos, setPartidos, onDeletePartido, equipos, setEquipos, onDeleteEquipo, boxscores, onGuardarBoxscore, onDeleteBoxscore, lideresEquipo, onGuardarLider, onDeleteLider, isAdmin }: EstadisticasProps) {
   // Pestaña activa dentro del componente
   const [seccionActiva, setSeccionActiva] = useState<SeccionEstadisticas>('clasificacion');
 
@@ -80,15 +82,15 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
   const [eqLocal, setEqLocal] = useState('');
   const [ptsLocal, setPtsLocal] = useState('');
   const [logoLocal, setLogoLocal] = useState('');
-  
+
   const [eqVisitante, setEqVisitante] = useState('');
   const [ptsVisitante, setPtsVisitante] = useState('');
   const [logoVisitante, setLogoVisitante] = useState('');
-  
-  const [pFecha, setPFecha] = useState('');
 
-  // Estados para el aviso de partido por WhatsApp al líder de cada equipo
-  const [partidoRecienCreado, setPartidoRecienCreado] = useState<Partido | null>(null);
+  const [pFecha, setPFecha] = useState('');
+  const [pJornada, setPJornada] = useState('');
+  const [editandoPartidoId, setEditandoPartidoId] = useState<number | null>(null);
+  const [jornadaFiltro, setJornadaFiltro] = useState('Todas');
 
   // Estados para el formulario de Líderes de Equipo
   const [lEquipo, setLEquipo] = useState('');
@@ -109,15 +111,51 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
   const [fotoUrl, setFotoUrl] = useState('');
   const [fotoDesc, setFotoDesc] = useState('');
 
+  // Estado para avisar cuando el boxscore mostrado viene precargado de un partido anterior entre los mismos equipos
+  const [boxscorePrecargado, setBoxscorePrecargado] = useState(false);
+
   // Sincroniza la copia editable del boxscore cada vez que se abre uno o cambian los datos de Firebase
   useEffect(() => {
     if (boxscoreAbierto === null) {
       setBoxscoreEdit(null);
+      setBoxscorePrecargado(false);
       return;
     }
+
     const bx = boxscores.find(b => b.partidoId === boxscoreAbierto);
-    setBoxscoreEdit(bx ? bx.jugadores.map(j => ({ ...j, periodos: { ...j.periodos } })) : []);
-  }, [boxscoreAbierto, boxscores]);
+    if (bx && bx.jugadores.length > 0) {
+      setBoxscoreEdit(bx.jugadores.map(j => ({ ...j, periodos: { ...j.periodos } })));
+      setBoxscorePrecargado(false);
+      return;
+    }
+
+    // Este partido todavía no tiene boxscore propio (o tiene uno vacío guardado): si los mismos dos equipos ya jugaron antes
+    // (en otra jornada), usamos ese boxscore como punto de partida para no cargar todo de nuevo.
+    const partidoActual = partidos.find(p => p.id === boxscoreAbierto);
+    const partidoPrevio = partidoActual
+      ? partidos
+          .filter(p => p.id !== partidoActual.id && (
+            (p.equipoLocal === partidoActual.equipoLocal && p.equipoVisitante === partidoActual.equipoVisitante) ||
+            (p.equipoLocal === partidoActual.equipoVisitante && p.equipoVisitante === partidoActual.equipoLocal)
+          ))
+          .sort((a, b) => b.id - a.id)[0]
+      : undefined;
+    const boxscorePrevio = partidoPrevio ? boxscores.find(b => b.partidoId === partidoPrevio.id) : undefined;
+
+    if (partidoPrevio && boxscorePrevio) {
+      const seInvirtioElLado = partidoPrevio.equipoLocal === partidoActual!.equipoVisitante;
+      setBoxscoreEdit(boxscorePrevio.jugadores.map(j => ({
+        ...j,
+        lado: seInvirtioElLado ? (j.lado === 'local' ? 'visitante' : 'local') : j.lado,
+        periodos: { ...j.periodos }
+      })));
+      setBoxscorePrecargado(true);
+      return;
+    }
+
+    setBoxscoreEdit([]);
+    setBoxscorePrecargado(false);
+  }, [boxscoreAbierto, boxscores, partidos]);
 
   // Guardar Jugador Nuevo
   const handleAddJugador = (e: React.FormEvent) => {
@@ -181,26 +219,7 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
     });
   };
 
-  // Guardar Partido
-  const handleAddPartido = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!eqLocal.trim() || !eqVisitante.trim() || !ptsLocal || !ptsVisitante || !pFecha) {
-      alert("Por favor completa todos los campos obligatorios del partido.");
-      return;
-    }
-
-    const nuevoPartido: Partido = {
-      id: Date.now(),
-      equipoLocal: eqLocal.trim(),
-      puntosLocal: Number(ptsLocal),
-      equipoVisitante: eqVisitante.trim(),
-      puntosVisitante: Number(ptsVisitante),
-      fecha: pFecha,
-      logoLocal: logoLocal.trim() || 'https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=100',
-      logoVisitante: logoVisitante.trim() || 'https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=100'
-    };
-
-    setPartidos([...partidos, nuevoPartido]);
+  const resetFormPartido = () => {
     setEqLocal('');
     setPtsLocal('');
     setLogoLocal('');
@@ -208,21 +227,95 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
     setPtsVisitante('');
     setLogoVisitante('');
     setPFecha('');
-    setPartidoRecienCreado(nuevoPartido);
-    alert("¡Partido guardado con éxito! 🏁");
+    setPJornada('');
   };
 
-  const handleDeleteJugador = (id: number) => {
-    if (window.confirm("¿Eliminar este jugador?")) {
-      setJugadores(jugadores.filter(j => j.id !== id));
-      if (editandoId === id) handleCancelarEdicion();
+  // Elegir un equipo ya cargado para autocompletar nombre y logo (local o visitante)
+  const handleElegirEquipoPartido = (lado: 'local' | 'visitante', nombreEquipo: string) => {
+    if (!nombreEquipo) return;
+    const equipo = equipos.find(eq => eq.nombre === nombreEquipo);
+    if (lado === 'local') {
+      setEqLocal(nombreEquipo);
+      if (equipo?.logo) setLogoLocal(equipo.logo);
+    } else {
+      setEqVisitante(nombreEquipo);
+      if (equipo?.logo) setLogoVisitante(equipo.logo);
     }
   };
 
-  const handleDeletePartido = (id: number) => {
+  // Guardar Partido (alta o edición)
+  const handleSubmitPartido = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eqLocal.trim() || !eqVisitante.trim() || !ptsLocal || !ptsVisitante || !pFecha) {
+      alert("Por favor completa todos los campos obligatorios del partido.");
+      return;
+    }
+
+    const datosPartido = {
+      equipoLocal: eqLocal.trim(),
+      puntosLocal: Number(ptsLocal),
+      equipoVisitante: eqVisitante.trim(),
+      puntosVisitante: Number(ptsVisitante),
+      fecha: pFecha,
+      jornada: pJornada.trim(),
+      logoLocal: logoLocal.trim() || 'https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=100',
+      logoVisitante: logoVisitante.trim() || 'https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=100'
+    };
+
+    if (editandoPartidoId !== null) {
+      setPartidos(partidos.map(p => p.id === editandoPartidoId ? { id: editandoPartidoId, ...datosPartido } : p));
+      setEditandoPartidoId(null);
+      resetFormPartido();
+      alert("¡Partido actualizado con éxito! ✏️");
+      return;
+    }
+
+    const nuevoPartido: Partido = { id: Date.now(), ...datosPartido };
+    setPartidos([...partidos, nuevoPartido]);
+    resetFormPartido();
+    setBoxscoreAbierto(nuevoPartido.id);
+    alert("¡Partido guardado con éxito! 🏁");
+  };
+
+  const handleIniciarEdicionPartido = (partido: Partido) => {
+    setEditandoPartidoId(partido.id);
+    setEqLocal(partido.equipoLocal);
+    setPtsLocal(String(partido.puntosLocal));
+    setLogoLocal(partido.logoLocal || '');
+    setEqVisitante(partido.equipoVisitante);
+    setPtsVisitante(String(partido.puntosVisitante));
+    setLogoVisitante(partido.logoVisitante || '');
+    setPFecha(partido.fecha);
+    setPJornada(partido.jornada || '');
+  };
+
+  const handleCancelarEdicionPartido = () => {
+    setEditandoPartidoId(null);
+    resetFormPartido();
+  };
+
+  const handleDeleteJugador = async (id: number) => {
+    if (window.confirm("¿Eliminar este jugador?")) {
+      try {
+        await onDeleteJugador(id);
+        if (editandoId === id) handleCancelarEdicion();
+      } catch (err) {
+        console.error('Error al eliminar el jugador en Firebase:', err);
+        alert("No se pudo eliminar el jugador. Revisa la consola (F12) para ver el error de Firebase.");
+      }
+    }
+  };
+
+  const handleDeletePartido = async (id: number) => {
     if (window.confirm("¿Eliminar este registro de partido?")) {
-      setPartidos(partidos.filter(p => p.id !== id));
-      if (partidoRecienCreado?.id === id) setPartidoRecienCreado(null);
+      try {
+        await onDeletePartido(id);
+        if (boxscoreAbierto === id) setBoxscoreAbierto(null);
+        if (editandoPartidoId === id) handleCancelarEdicionPartido();
+      } catch (err) {
+        console.error('Error al eliminar el partido en Firebase:', err);
+        alert("No se pudo eliminar el partido. Revisa la consola (F12) para ver el error de Firebase.");
+      }
     }
   };
 
@@ -457,6 +550,10 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
     .sort((a, b) => (b.victorias - b.derrotas) - (a.victorias - a.derrotas));
 
   const jugadoresOrdenados = [...jugadores].sort((a, b) => b.puntos - a.puntos);
+
+  // Filtro de partidos por Jornada
+  const jornadasDisponibles = ['Todas', ...Array.from(new Set(partidos.map(p => p.jornada).filter((j): j is string => !!j)))];
+  const partidosFiltrados = partidos.filter(p => jornadaFiltro === 'Todas' || p.jornada === jornadaFiltro);
 
   // Galería de fotos por Equipo
   const equipoGaleria = equipos.find(eq => eq.id === equipoGaleriaId) || null;
@@ -721,14 +818,22 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
         {/* Formulario Registrar Partido */}
         {isAdmin && (
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 max-w-3xl mx-auto shadow-xl">
-            <h4 className="text-xl font-bold text-[#05fcfe] mb-4 flex items-center gap-2">🗓️ Registrar Partido</h4>
-            <form onSubmit={handleAddPartido} className="space-y-4">
+            <h4 className="text-xl font-bold text-[#05fcfe] mb-4 flex items-center gap-2">
+              {editandoPartidoId !== null ? '✏️ Editar Partido' : '🗓️ Registrar Partido'}
+            </h4>
+            <form onSubmit={handleSubmitPartido} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Local */}
                 <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-800 space-y-3">
                   <h5 className="text-sm font-bold text-orange-400">🏠 EQUIPO LOCAL</h5>
                   <div>
                     <label className="block text-xs text-gray-400 mb-1">Nombre del Equipo:</label>
+                    {equipos.length > 0 && (
+                      <select value="" onChange={(e) => handleElegirEquipoPartido('local', e.target.value)} className="w-full p-2 text-xs rounded bg-gray-900 border border-gray-700 text-gray-300 focus:outline-none mb-1">
+                        <option value="">— Elegir equipo ya cargado —</option>
+                        {equipos.map(eq => <option key={eq.id} value={eq.nombre}>{eq.nombre}</option>)}
+                      </select>
+                    )}
                     <input type="text" value={eqLocal} onChange={(e) => setEqLocal(e.target.value)} placeholder="Ej: Krack League" className="w-full p-2 text-sm rounded bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-orange-400" required />
                   </div>
                   <div>
@@ -746,6 +851,12 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
                   <h5 className="text-sm font-bold text-sky-400">🚀 EQUIPO VISITANTE</h5>
                   <div>
                     <label className="block text-xs text-gray-400 mb-1">Nombre del Equipo:</label>
+                    {equipos.length > 0 && (
+                      <select value="" onChange={(e) => handleElegirEquipoPartido('visitante', e.target.value)} className="w-full p-2 text-xs rounded bg-gray-900 border border-gray-700 text-gray-300 focus:outline-none mb-1">
+                        <option value="">— Elegir equipo ya cargado —</option>
+                        {equipos.map(eq => <option key={eq.id} value={eq.nombre}>{eq.nombre}</option>)}
+                      </select>
+                    )}
                     <input type="text" value={eqVisitante} onChange={(e) => setEqVisitante(e.target.value)} placeholder="Ej: Halcones FC" className="w-full p-2 text-sm rounded bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-sky-400" required />
                   </div>
                   <div>
@@ -759,46 +870,31 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">Fecha del encuentro:</label>
-                <input type="text" value={pFecha} onChange={(e) => setPFecha(e.target.value)} placeholder="Ej: 18 Jun 2026" className="w-full p-2 text-sm rounded bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-[#05fcfe]" required />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Fecha del encuentro:</label>
+                  <input type="date" value={pFecha} onChange={(e) => setPFecha(e.target.value)} className="w-full p-2 text-sm rounded bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-[#05fcfe] [color-scheme:dark]" required />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Jornada (opcional):</label>
+                  <input type="text" list="jornadas-existentes" value={pJornada} onChange={(e) => setPJornada(e.target.value)} placeholder="Ej: Jornada 1" className="w-full p-2 text-sm rounded bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-[#05fcfe]" />
+                  <datalist id="jornadas-existentes">
+                    {jornadasDisponibles.filter(j => j !== 'Todas').map(j => <option key={j} value={j} />)}
+                  </datalist>
+                </div>
               </div>
 
-              <button type="submit" className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded transition-colors cursor-pointer shadow-md">
-                Guardar Partido
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* Aviso por WhatsApp tras registrar un partido nuevo */}
-        {isAdmin && partidoRecienCreado && (
-          <div className="bg-emerald-950/30 border border-emerald-700 rounded-xl p-5 max-w-3xl mx-auto space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <h4 className="text-sm font-bold text-emerald-400">📲 Avisar por WhatsApp a los equipos de este partido</h4>
-              <button onClick={() => setPartidoRecienCreado(null)} className="text-gray-400 hover:text-white text-xs cursor-pointer shrink-0">✕ Cerrar</button>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              {[
-                { nombre: partidoRecienCreado.equipoLocal, rival: partidoRecienCreado.equipoVisitante },
-                { nombre: partidoRecienCreado.equipoVisitante, rival: partidoRecienCreado.equipoLocal }
-              ].map(({ nombre, rival }) => {
-                const tieneLider = lideresEquipo.some(l => l.equipo.trim().toLowerCase() === nombre.trim().toLowerCase());
-                return tieneLider ? (
-                  <button
-                    key={nombre}
-                    onClick={() => handleAvisarLider(nombre, rival, partidoRecienCreado.fecha)}
-                    className="bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-2 px-4 rounded-lg cursor-pointer transition-colors"
-                  >
-                    📲 Avisar a {nombre}
+              <div className="flex gap-3">
+                <button type="submit" className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded transition-colors cursor-pointer shadow-md">
+                  {editandoPartidoId !== null ? '💾 Guardar Cambios del Partido' : 'Guardar Partido'}
+                </button>
+                {editandoPartidoId !== null && (
+                  <button type="button" onClick={handleCancelarEdicionPartido} className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2.5 px-5 rounded transition-colors cursor-pointer">
+                    Cancelar
                   </button>
-                ) : (
-                  <span key={nombre} className="text-xs text-gray-500 bg-gray-900 border border-gray-800 rounded-lg py-2 px-4">
-                    {nombre}: sin líder cargado
-                  </span>
-                );
-              })}
-            </div>
+                )}
+              </div>
+            </form>
           </div>
         )}
 
@@ -817,7 +913,15 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
                   if (enEdicion && editLiderForm) {
                     return (
                       <form key={lider.id} onSubmit={handleGuardarEdicionLider} className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-gray-900 border border-gray-700 rounded-lg p-3">
-                        <input type="text" value={editLiderForm.equipo} onChange={(e) => handleEditLiderFormChange('equipo', e.target.value)} placeholder="Equipo" className="p-1.5 text-xs rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" required />
+                        <div>
+                          {equipos.length > 0 && (
+                            <select value="" onChange={(e) => e.target.value && handleEditLiderFormChange('equipo', e.target.value)} className="w-full p-1 text-[10px] rounded bg-gray-950 border border-gray-700 text-gray-300 focus:outline-none mb-1">
+                              <option value="">— Elegir —</option>
+                              {equipos.map(eq => <option key={eq.id} value={eq.nombre}>{eq.nombre}</option>)}
+                            </select>
+                          )}
+                          <input type="text" value={editLiderForm.equipo} onChange={(e) => handleEditLiderFormChange('equipo', e.target.value)} placeholder="Equipo" className="w-full p-1.5 text-xs rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" required />
+                        </div>
                         <input type="text" value={editLiderForm.liderNombre} onChange={(e) => handleEditLiderFormChange('liderNombre', e.target.value)} placeholder="Nombre del líder" className="p-1.5 text-xs rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
                         <input type="text" value={editLiderForm.telefono} onChange={(e) => handleEditLiderFormChange('telefono', e.target.value)} placeholder="Ej: 5491122334455" className="p-1.5 text-xs rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" required />
                         <div className="flex gap-2 sm:col-span-3">
@@ -845,12 +949,38 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
             )}
 
             <form onSubmit={handleAddLider} className="bg-gray-900/60 border border-gray-800 rounded-lg p-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <input type="text" value={lEquipo} onChange={(e) => setLEquipo(e.target.value)} placeholder="Nombre del equipo" className="p-2 text-sm rounded bg-gray-950 border border-gray-700 text-white focus:outline-none focus:border-[#05fcfe]" required />
+              <div>
+                {equipos.length > 0 && (
+                  <select value="" onChange={(e) => e.target.value && setLEquipo(e.target.value)} className="w-full p-2 text-xs rounded bg-gray-950 border border-gray-700 text-gray-300 focus:outline-none mb-1">
+                    <option value="">— Elegir equipo ya cargado —</option>
+                    {equipos.map(eq => <option key={eq.id} value={eq.nombre}>{eq.nombre}</option>)}
+                  </select>
+                )}
+                <input type="text" value={lEquipo} onChange={(e) => setLEquipo(e.target.value)} placeholder="Nombre del equipo" className="w-full p-2 text-sm rounded bg-gray-950 border border-gray-700 text-white focus:outline-none focus:border-[#05fcfe]" required />
+              </div>
               <input type="text" value={lLiderNombre} onChange={(e) => setLLiderNombre(e.target.value)} placeholder="Nombre del líder" className="p-2 text-sm rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
               <input type="text" value={lTelefono} onChange={(e) => setLTelefono(e.target.value)} placeholder="WhatsApp (ej: 5491122334455)" className="p-2 text-sm rounded bg-gray-950 border border-gray-700 text-white focus:outline-none focus:border-[#05fcfe]" required />
               <button type="submit" className="sm:col-span-3 bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 rounded transition-colors cursor-pointer text-sm">➕ Agregar Líder de Equipo</button>
             </form>
             <p className="text-[11px] text-gray-500 text-center">El nombre del equipo debe escribirse igual a como lo cargás en el partido (Local/Visitante), para que el sistema lo reconozca.</p>
+          </div>
+        )}
+
+        {/* Filtro por Jornada */}
+        {jornadasDisponibles.length > 1 && (
+          <div className="flex gap-1 bg-gray-800 p-1 rounded-lg overflow-x-auto w-fit max-w-full">
+            {jornadasDisponibles.map((j) => (
+              <button
+                key={j}
+                type="button"
+                onClick={() => setJornadaFiltro(j)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
+                  jornadaFiltro === j ? 'bg-[#05fcfe] text-gray-900' : 'text-gray-300 hover:text-white'
+                }`}
+              >
+                {j}
+              </button>
+            ))}
           </div>
         )}
 
@@ -865,6 +995,7 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
                 <thead>
                   <tr className="text-gray-500 text-[11px] uppercase tracking-wider border-b border-gray-800">
                     <th className="py-3 px-4">Fecha</th>
+                    <th className="py-3 px-2">Jornada</th>
                     <th className="py-3 px-2">Local</th>
                     <th className="py-3 px-2 text-center">Marcador</th>
                     <th className="py-3 px-2">Visitante</th>
@@ -872,7 +1003,7 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
                   </tr>
                 </thead>
                 <tbody>
-                  {partidos.map((partido) => {
+                  {partidosFiltrados.map((partido) => {
                     const localGana = partido.puntosLocal > partido.puntosVisitante;
                     const empate = partido.puntosLocal === partido.puntosVisitante;
                     const imgLocal = partido.logoLocal || LOGO_PLACEHOLDER;
@@ -888,6 +1019,7 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
                         }`}
                       >
                         <td className="py-3 px-4 text-[11px] text-gray-500 font-semibold">{partido.fecha}</td>
+                        <td className="px-2 text-[11px] text-gray-500">{partido.jornada || '-'}</td>
                         <td className="px-2">
                           <div className="flex items-center gap-2 min-w-[110px]">
                             <img src={imgLocal} alt={partido.equipoLocal} className="w-7 h-7 rounded-full object-cover border border-gray-800 shrink-0 bg-gray-900" />
@@ -911,12 +1043,20 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
                         </td>
                         {isAdmin && (
                           <td className="px-2 text-center">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDeletePartido(partido.id); }}
-                              className="bg-red-600 hover:bg-red-700 text-white text-[10px] py-1 px-2 rounded cursor-pointer"
-                            >
-                              🗑️
-                            </button>
+                            <div className="flex gap-1 justify-center">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleIniciarEdicionPartido(partido); }}
+                                className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] py-1 px-2 rounded cursor-pointer"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDeletePartido(partido.id); }}
+                                className="bg-red-600 hover:bg-red-700 text-white text-[10px] py-1 px-2 rounded cursor-pointer"
+                              >
+                                🗑️
+                              </button>
+                            </div>
                           </td>
                         )}
                       </tr>
@@ -942,6 +1082,31 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
                   <button onClick={() => setBoxscoreAbierto(null)} className="text-gray-400 hover:text-white text-xs cursor-pointer">✕ Cerrar</button>
                 </div>
 
+                {/* Avisar por WhatsApp a los líderes de cada equipo (Solo Admin) */}
+                {isAdmin && (
+                  <div className="p-3 bg-emerald-950/30 border-b border-emerald-800 flex flex-wrap gap-2">
+                    {[
+                      { nombre: boxscorePartido.equipoLocal, rival: boxscorePartido.equipoVisitante },
+                      { nombre: boxscorePartido.equipoVisitante, rival: boxscorePartido.equipoLocal }
+                    ].map(({ nombre, rival }) => {
+                      const tieneLider = lideresEquipo.some(l => l.equipo.trim().toLowerCase() === nombre.trim().toLowerCase());
+                      return tieneLider ? (
+                        <button
+                          key={nombre}
+                          onClick={() => handleAvisarLider(nombre, rival, boxscorePartido.fecha)}
+                          className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg cursor-pointer transition-colors"
+                        >
+                          📲 Avisar a {nombre}
+                        </button>
+                      ) : (
+                        <span key={nombre} className="text-[11px] text-gray-500 bg-gray-900 border border-gray-800 rounded-lg py-1.5 px-3">
+                          {nombre}: sin líder cargado
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {/* Pestañas de período */}
                 <div className="flex gap-1 p-3 bg-gray-900/60 overflow-x-auto border-b border-gray-800">
                   {(['ALL', ...PERIODOS] as TabPeriodo[]).map((p) => (
@@ -961,6 +1126,12 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
                 {isAdmin && periodoActivo === 'ALL' && (
                   <div className="px-4 py-2 bg-yellow-950/40 border-b border-yellow-800 text-yellow-400 text-xs">
                     ℹ️ "ALL" es de solo lectura y muestra el acumulado de todos los períodos. Para cargar minutos, puntos o tiros, seleccioná primero un período: P1, P2, P3, P4, OT1 u OT2.
+                  </div>
+                )}
+
+                {isAdmin && boxscorePrecargado && (
+                  <div className="px-4 py-2 bg-sky-950/40 border-b border-sky-800 text-sky-400 text-xs">
+                    ℹ️ Este partido todavía no tiene boxscore propio: se precargó la misma lista de jugadores y los valores del último partido entre estos dos equipos. Editá los minutos, puntos y tiros para reflejar este encuentro y guardá los cambios.
                   </div>
                 )}
 
@@ -1126,6 +1297,12 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
                 </div>
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Equipo / Club:</label>
+                  {equipos.length > 0 && (
+                    <select value="" onChange={(e) => e.target.value && setJEquipo(e.target.value)} className="w-full p-2 text-xs rounded bg-gray-900 border border-gray-700 text-gray-300 focus:outline-none mb-1">
+                      <option value="">— Elegir equipo ya cargado —</option>
+                      {equipos.map(eq => <option key={eq.id} value={eq.nombre}>{eq.nombre}</option>)}
+                    </select>
+                  )}
                   <input type="text" value={jEquipo} onChange={(e) => setJEquipo(e.target.value)} placeholder="Ej: Krack League" className="w-full p-2 text-sm rounded bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-[#05fcfe]" required />
                 </div>
               </div>
@@ -1201,7 +1378,15 @@ export default function Estadisticas({ jugadores, setJugadores, partidos, setPar
                           </div>
                           <input type="url" value={editForm.foto} onChange={(e) => handleEditFormChange('foto', e.target.value)} placeholder="URL foto" className="w-full p-1 text-xs rounded bg-gray-950 border border-gray-700 text-white focus:outline-none mt-1" />
                         </td>
-                        <td className="px-2"><input type="text" value={editForm.equipo} onChange={(e) => handleEditFormChange('equipo', e.target.value)} className="w-24 p-1 text-xs text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" required /></td>
+                        <td className="px-2">
+                          {equipos.length > 0 && (
+                            <select value="" onChange={(e) => e.target.value && handleEditFormChange('equipo', e.target.value)} className="w-24 p-1 text-[10px] rounded bg-gray-950 border border-gray-700 text-gray-300 focus:outline-none mb-1">
+                              <option value="">— Elegir —</option>
+                              {equipos.map(eq => <option key={eq.id} value={eq.nombre}>{eq.nombre}</option>)}
+                            </select>
+                          )}
+                          <input type="text" value={editForm.equipo} onChange={(e) => handleEditFormChange('equipo', e.target.value)} className="w-24 p-1 text-xs text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" required />
+                        </td>
                         <td className="px-2">
                           <select value={editForm.posicion} onChange={(e) => handleEditFormChange('posicion', e.target.value)} className="w-full p-1 text-xs rounded bg-gray-950 border border-gray-700 text-white focus:outline-none">
                             <option value="Base">Base (PG)</option>
