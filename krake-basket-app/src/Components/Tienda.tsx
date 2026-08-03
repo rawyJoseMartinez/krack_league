@@ -631,7 +631,7 @@ export default function Tienda({ productos, onGuardarProducto, onDeleteProducto,
       {/* ==================== MODAL DE COMPRA ==================== */}
       {productoSeleccionado && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={cerrarCompra}>
-          <div className="w-full max-w-sm bg-gray-950 border border-gray-800 rounded-xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm max-h-[90vh] bg-gray-950 border border-gray-800 rounded-xl shadow-2xl overflow-y-auto overflow-x-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="w-full h-40 bg-gray-900 overflow-hidden">
               <img src={productoSeleccionado.imagenUrl || IMAGEN_PLACEHOLDER} alt={productoSeleccionado.nombre} className="w-full h-full object-cover" />
             </div>

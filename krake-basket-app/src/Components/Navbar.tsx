@@ -12,7 +12,7 @@ export default function Navbar({ setSection, currentSection }: NavbarProps) {
 
   const links = [
     { id: 'home', label: 'Inicio' },
-    { id: 'Multimedia', label: 'Multimedia' },
+    { id: 'Multimedia', label: 'Krack Estudio' },
     { id: 'estadisticas', label: 'Estadísticas' },
     { id: 'tienda', label: 'Tienda' },
     { id: 'cancha', label: 'Reservar Cancha' },
@@ -76,6 +76,7 @@ export default function Navbar({ setSection, currentSection }: NavbarProps) {
               {link.label}
             </button>
           ))}
+    
         </div>
 
       </div>

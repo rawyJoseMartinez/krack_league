@@ -108,6 +108,10 @@ export interface FotoHistoria {
   url: string;
 }
 
+export interface KrackEstudioConfig {
+  avatarUrl: string;
+}
+
 export interface QuienesData {
   titulo: string;
   descripcion: string;

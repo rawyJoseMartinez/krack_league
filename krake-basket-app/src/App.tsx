@@ -16,7 +16,7 @@ import QuienesSomos from './Components/QuienesSomos';
 import CalendarioCancha from './Components/CalendarioCancha';
 import Login from './Components/Login';
 import ReproductorFondo from './Components/ReproductorFondo';
-import type { ArchivoGaleria, Sponsor, Jugador, Partido, Equipo, Boxscore, HomeData, QuienesData, Producto, ServicioIndumentaria, LiderEquipo } from './types';
+import type { ArchivoGaleria, Sponsor, Jugador, Partido, Equipo, Boxscore, HomeData, QuienesData, Producto, ServicioIndumentaria, LiderEquipo, KrackEstudioConfig } from './types';
 
 function App() {
   const [currentSection, setCurrentSection] = useState<string>('home');
@@ -35,6 +35,7 @@ function App() {
   const [quienesData, setQuienesData] = useState<QuienesData | null>(null);
   const [sponsors, setSponsors] = useState<Sponsor[]>([]);
   const [contenido, setContenido] = useState<ArchivoGaleria[]>([]);
+  const [krackEstudioConfig, setKrackEstudioConfig] = useState<KrackEstudioConfig>({ avatarUrl: '' });
 
   // NUEVOS: Estados conectados a Firebase en tiempo real
   const [jugadores, setJugadores] = useState<Jugador[]>([]);
@@ -124,6 +125,14 @@ function App() {
         desc: doc.data().desc
       })) as ArchivoGaleria[];
       setContenido(datosGaleria);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 4b. Escuchar la configuración de Krack Estudio (avatar del perfil)
+  useEffect(() => {
+    const unsubscribe = onSnapshot(doc(db, 'krackEstudio', 'config'), (docSnap) => {
+      setKrackEstudioConfig({ avatarUrl: docSnap.exists() ? (docSnap.data().avatarUrl || '') : '' });
     });
     return () => unsubscribe();
   }, []);
@@ -336,13 +345,24 @@ function App() {
     await deleteDoc(doc(db, 'lideresEquipo', String(id)));
   };
 
+  const handleGuardarAvatarKrackEstudio = async (avatarUrl: string) => {
+    await setDoc(doc(db, 'krackEstudio', 'config'), { avatarUrl });
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans flex flex-col justify-between">
       <div className="w-full">
         <Navbar setSection={setCurrentSection} currentSection={currentSection} />
         <main className="container mx-auto px-4 py-8">
           {currentSection === 'home' && homeData && <Home data={homeData} isAdmin={isAdmin} />}
-          {currentSection === 'Multimedia' && <Galeria data={contenido} isAdmin={isAdmin} />}
+          {currentSection === 'Multimedia' && (
+            <Galeria
+              data={contenido}
+              avatarUrl={krackEstudioConfig.avatarUrl}
+              onGuardarAvatarUrl={handleGuardarAvatarKrackEstudio}
+              isAdmin={isAdmin}
+            />
+          )}
 
           {currentSection === 'estadisticas' && (
             <Estadisticas
