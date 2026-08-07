@@ -69,6 +69,8 @@ export type PeriodoJuego = 'P1' | 'P2' | 'P3' | 'P4' | 'OT1' | 'OT2';
 export interface StatsPeriodo {
   min: number;
   pts: number;
+  ast: number; // asistencias
+  reb: number; // rebotes
   fgM: number; // tiros de campo anotados
   fgA: number; // tiros de campo intentados
   tpM: number; // triples anotados

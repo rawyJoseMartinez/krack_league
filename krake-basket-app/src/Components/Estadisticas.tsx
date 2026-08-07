@@ -27,11 +27,13 @@ type TabPeriodo = 'ALL' | PeriodoJuego;
 
 const PERIODOS: PeriodoJuego[] = ['P1', 'P2', 'P3', 'P4', 'OT1', 'OT2'];
 
-const statsVacias = (): StatsPeriodo => ({ min: 0, pts: 0, fgM: 0, fgA: 0, tpM: 0, tpA: 0, ftM: 0, ftA: 0 });
+const statsVacias = (): StatsPeriodo => ({ min: 0, pts: 0, ast: 0, reb: 0, fgM: 0, fgA: 0, tpM: 0, tpA: 0, ftM: 0, ftA: 0 });
 
 const sumarStats = (a: StatsPeriodo, b: StatsPeriodo): StatsPeriodo => ({
   min: a.min + b.min,
   pts: a.pts + b.pts,
+  ast: a.ast + b.ast,
+  reb: a.reb + b.reb,
   fgM: a.fgM + b.fgM,
   fgA: a.fgA + b.fgA,
   tpM: a.tpM + b.tpM,
@@ -40,8 +42,11 @@ const sumarStats = (a: StatsPeriodo, b: StatsPeriodo): StatsPeriodo => ({
   ftA: a.ftA + b.ftA
 });
 
+// Completa con 0 los campos que un período no tenga (p. ej. boxscores guardados antes de sumar AST/REB al modelo).
+const normalizarStats = (s?: Partial<StatsPeriodo>): StatsPeriodo => ({ ...statsVacias(), ...s });
+
 const statsTotalesJugador = (jugador: JugadorBoxscore): StatsPeriodo =>
-  PERIODOS.reduce((acc, p) => sumarStats(acc, jugador.periodos[p] || statsVacias()), statsVacias());
+  PERIODOS.reduce((acc, p) => sumarStats(acc, normalizarStats(jugador.periodos[p])), statsVacias());
 
 const formatPct = (m: number, a: number) => (a === 0 ? '-' : `${Math.round((m / a) * 100)}%`);
 
@@ -77,6 +82,9 @@ export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador,
   // --- NUEVOS ESTADOS PARA EDICIÓN DE JUGADORES ---
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Jugador | null>(null);
+
+  // Jugador cuyo historial de partidos (boxscores) está desplegado en la tabla de Jugadores
+  const [jugadorLogAbierto, setJugadorLogAbierto] = useState<number | null>(null);
 
   // Estados para el formulario de Partidos
   const [eqLocal, setEqLocal] = useState('');
@@ -428,7 +436,7 @@ export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador,
     if (!boxscoreEdit) return;
     setBoxscoreEdit(boxscoreEdit.map(j => {
       if (j.jugadorId !== jugadorId) return j;
-      const actual = j.periodos[periodo] || statsVacias();
+      const actual = normalizarStats(j.periodos[periodo]);
       return { ...j, periodos: { ...j.periodos, [periodo]: { ...actual, [campo]: valor } } };
     }));
   };
@@ -457,6 +465,42 @@ export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador,
   };
 
   const boxscorePartido = boxscoreAbierto !== null ? partidos.find(p => p.id === boxscoreAbierto) || null : null;
+
+  // Despliega/oculta el historial de partidos de un jugador en la pestaña Jugadores
+  const handleToggleLogJugador = (jugadorId: number) => {
+    setJugadorLogAbierto(prev => (prev === jugadorId ? null : jugadorId));
+  };
+
+  // Arma, a partir de los boxscores guardados, el listado de partidos jugados por un jugador
+  // (fecha, rival y sus stats de ese encuentro), del más reciente al más antiguo.
+  const historialJugador = (jugadorId: number) => {
+    return boxscores
+      .map(bx => {
+        const jb = bx.jugadores.find(j => j.jugadorId === jugadorId);
+        const partido = partidos.find(p => p.id === bx.partidoId);
+        if (!jb || !partido) return null;
+        const rival = jb.lado === 'local' ? partido.equipoVisitante : partido.equipoLocal;
+        return { partido, rival, stats: statsTotalesJugador(jb) };
+      })
+      .filter((fila): fila is { partido: Partido; rival: string; stats: StatsPeriodo } => fila !== null)
+      .sort((a, b) => new Date(b.partido.fecha).getTime() - new Date(a.partido.fecha).getTime());
+  };
+
+  // PTS/AST/REB a mostrar para un jugador: si ya tiene partidos cargados en algún Boxscore, se suman
+  // automáticamente desde ahí (para que cargar un boxscore actualice la tabla sin doble tipeo). Si todavía
+  // no tiene ninguno, se usan los valores manuales de su ficha (carga inicial, antes de tener boxscores).
+  const totalesMostrados = (jugador: Jugador) => {
+    const historial = historialJugador(jugador.id);
+    if (historial.length === 0) {
+      return { puntos: jugador.puntos, asistencias: jugador.asistencias, rebotes: jugador.rebotes, esCalculado: false as const };
+    }
+    const totales = historial.reduce((acc, { stats }) => ({
+      puntos: acc.puntos + stats.pts,
+      asistencias: acc.asistencias + stats.ast,
+      rebotes: acc.rebotes + stats.reb
+    }), { puntos: 0, asistencias: 0, rebotes: 0 });
+    return { ...totales, esCalculado: true as const };
+  };
 
   // Guardar Equipo Nuevo (Clasificación)
   const handleAddEquipo = async (e: React.FormEvent) => {
@@ -549,7 +593,9 @@ export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador,
     .filter(eq => eq.conferencia === conferenciaActiva)
     .sort((a, b) => (b.victorias - b.derrotas) - (a.victorias - a.derrotas));
 
-  const jugadoresOrdenados = [...jugadores].sort((a, b) => b.puntos - a.puntos);
+  const jugadoresOrdenados = [...jugadores].sort((a, b) => totalesMostrados(b).puntos - totalesMostrados(a).puntos);
+  // Columnas de la tabla de Jugadores: Jugador, Equipo, Posición, PTS, AST, REB, "Partidos" + Acciones (si es admin)
+  const totalColumnasJugadores = isAdmin ? 8 : 7;
 
   // Filtro de partidos por Jornada
   const jornadasDisponibles = ['Todas', ...Array.from(new Set(partidos.map(p => p.jornada).filter((j): j is string => !!j)))];
@@ -1125,7 +1171,7 @@ export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador,
 
                 {isAdmin && periodoActivo === 'ALL' && (
                   <div className="px-4 py-2 bg-yellow-950/40 border-b border-yellow-800 text-yellow-400 text-xs">
-                    ℹ️ "ALL" es de solo lectura y muestra el acumulado de todos los períodos. Para cargar minutos, puntos o tiros, seleccioná primero un período: P1, P2, P3, P4, OT1 u OT2.
+                    ℹ️ "ALL" es de solo lectura y muestra el acumulado de todos los períodos. Para cargar minutos, puntos, asistencias, rebotes o tiros, seleccioná primero un período: P1, P2, P3, P4, OT1 u OT2.
                   </div>
                 )}
 
@@ -1162,7 +1208,7 @@ export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador,
 
                 {(['local', 'visitante'] as const).map((lado) => {
                   const filas = boxscoreEdit.filter(j => j.lado === lado);
-                  const totales = filas.reduce((acc, j) => sumarStats(acc, periodoActivo === 'ALL' ? statsTotalesJugador(j) : (j.periodos[periodoActivo] || statsVacias())), statsVacias());
+                  const totales = filas.reduce((acc, j) => sumarStats(acc, periodoActivo === 'ALL' ? statsTotalesJugador(j) : normalizarStats(j.periodos[periodoActivo])), statsVacias());
                   const editable = isAdmin && periodoActivo !== 'ALL';
 
                   return (
@@ -1177,6 +1223,8 @@ export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador,
                               <th className="py-2 px-2">Jugador</th>
                               <th className="py-2 px-2 text-center">MIN</th>
                               <th className="py-2 px-2 text-center">PTS</th>
+                              <th className="py-2 px-2 text-center">AST</th>
+                              <th className="py-2 px-2 text-center">REB</th>
                               <th className="py-2 px-2 text-center">FG{editable ? '' : '%'}</th>
                               <th className="py-2 px-2 text-center">3P{editable ? '' : '%'}</th>
                               <th className="py-2 px-2 text-center">FT{editable ? '' : '%'}</th>
@@ -1185,9 +1233,9 @@ export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador,
                           </thead>
                           <tbody>
                             {filas.length === 0 ? (
-                              <tr><td colSpan={7} className="py-4 text-center text-gray-500">Sin jugadores cargados en este lado.</td></tr>
+                              <tr><td colSpan={9} className="py-4 text-center text-gray-500">Sin jugadores cargados en este lado.</td></tr>
                             ) : filas.map((j) => {
-                              const stats = periodoActivo === 'ALL' ? statsTotalesJugador(j) : (j.periodos[periodoActivo] || statsVacias());
+                              const stats = periodoActivo === 'ALL' ? statsTotalesJugador(j) : normalizarStats(j.periodos[periodoActivo]);
                               return (
                                 <tr key={j.jugadorId} className="border-b border-gray-800/60">
                                   <td className="py-2 px-2">
@@ -1200,6 +1248,8 @@ export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador,
                                     <>
                                       <td className="px-1"><input type="number" min="0" value={stats.min} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'min', Number(e.target.value))} className="w-12 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" /></td>
                                       <td className="px-1"><input type="number" min="0" value={stats.pts} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'pts', Number(e.target.value))} className="w-12 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" /></td>
+                                      <td className="px-1"><input type="number" min="0" value={stats.ast} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'ast', Number(e.target.value))} className="w-12 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" /></td>
+                                      <td className="px-1"><input type="number" min="0" value={stats.reb} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'reb', Number(e.target.value))} className="w-12 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" /></td>
                                       <td className="px-1">
                                         <div className="flex items-center justify-center gap-1">
                                           <input type="number" min="0" value={stats.fgM} onChange={(e) => handleStatChange(j.jugadorId, periodoActivo as PeriodoJuego, 'fgM', Number(e.target.value))} className="w-8 p-1 text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" />
@@ -1226,6 +1276,8 @@ export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador,
                                     <>
                                       <td className="text-center px-2 text-gray-200">{stats.min}</td>
                                       <td className="text-center px-2 font-bold text-orange-400">{stats.pts}</td>
+                                      <td className="text-center px-2 font-semibold text-sky-400">{stats.ast}</td>
+                                      <td className="text-center px-2 font-semibold text-emerald-400">{stats.reb}</td>
                                       <td className="text-center px-2 text-gray-300">{formatPct(stats.fgM, stats.fgA)}</td>
                                       <td className="text-center px-2 text-gray-300">{formatPct(stats.tpM, stats.tpA)}</td>
                                       <td className="text-center px-2 text-gray-300">{formatPct(stats.ftM, stats.ftA)}</td>
@@ -1246,6 +1298,8 @@ export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador,
                                 <td className="py-2 px-2 text-gray-300">TOTAL</td>
                                 <td className="text-center px-2 text-white">{totales.min}</td>
                                 <td className="text-center px-2 text-[#05fcfe]">{totales.pts}</td>
+                                <td className="text-center px-2 text-sky-400">{totales.ast}</td>
+                                <td className="text-center px-2 text-emerald-400">{totales.reb}</td>
                                 <td className="text-center px-2 text-gray-300">{editable ? `${totales.fgM}/${totales.fgA}` : formatPct(totales.fgM, totales.fgA)}</td>
                                 <td className="text-center px-2 text-gray-300">{editable ? `${totales.tpM}/${totales.tpA}` : formatPct(totales.tpM, totales.tpA)}</td>
                                 <td className="text-center px-2 text-gray-300">{editable ? `${totales.ftM}/${totales.ftA}` : formatPct(totales.ftM, totales.ftA)}</td>
@@ -1351,6 +1405,10 @@ export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador,
         {jugadores.length === 0 ? (
           <div className="text-center py-6 text-gray-500 text-sm">No hay jugadores cargados en la plantilla.</div>
         ) : (
+          <>
+          <p className="text-[11px] text-gray-500 -mb-2">
+            * PTS/AST/REB se calculan automáticamente sumando los partidos de ese jugador cargados en Boxscore (pestaña "Partidos"). Sin asterisco: todavía no tiene ningún boxscore y se muestra el valor cargado a mano.
+          </p>
           <div className="overflow-x-auto bg-gray-950 border border-gray-800 rounded-xl shadow-lg">
             <table className="w-full text-sm text-left whitespace-nowrap">
               <thead>
@@ -1361,6 +1419,7 @@ export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador,
                   <th className="py-3 px-2 text-center">PTS</th>
                   <th className="py-3 px-2 text-center">AST</th>
                   <th className="py-3 px-2 text-center">REB</th>
+                  <th className="py-3 px-2 text-center"></th>
                   {isAdmin && <th className="py-3 px-2 text-center">Acciones</th>}
                 </tr>
               </thead>
@@ -1369,6 +1428,7 @@ export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador,
                   const esModoEdicion = editandoId === jugador.id && editForm;
 
                   if (esModoEdicion && editForm) {
+                    const totalesEdit = totalesMostrados(jugador);
                     return (
                       <tr key={jugador.id} className="border-b border-gray-800/60 bg-gray-900/80">
                         <td className="py-2 px-4">
@@ -1396,9 +1456,19 @@ export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador,
                             <option value="Pívot">Pívot (C)</option>
                           </select>
                         </td>
-                        <td className="px-2"><input type="number" min="0" value={editForm.puntos} onChange={(e) => handleEditFormChange('puntos', Number(e.target.value))} className="w-14 p-1 text-xs text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" /></td>
-                        <td className="px-2"><input type="number" min="0" value={editForm.asistencias} onChange={(e) => handleEditFormChange('asistencias', Number(e.target.value))} className="w-14 p-1 text-xs text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" /></td>
-                        <td className="px-2"><input type="number" min="0" value={editForm.rebotes} onChange={(e) => handleEditFormChange('rebotes', Number(e.target.value))} className="w-14 p-1 text-xs text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" /></td>
+                        {totalesEdit.esCalculado ? (
+                          <td colSpan={3} className="px-2 text-center text-[11px] text-gray-400">
+                            🔒 {totalesEdit.puntos} PTS · {totalesEdit.asistencias} AST · {totalesEdit.rebotes} REB
+                            <div className="text-[9px] text-gray-500">Calculado desde Boxscores (editalo ahí)</div>
+                          </td>
+                        ) : (
+                          <>
+                            <td className="px-2"><input type="number" min="0" value={editForm.puntos} onChange={(e) => handleEditFormChange('puntos', Number(e.target.value))} className="w-14 p-1 text-xs text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" /></td>
+                            <td className="px-2"><input type="number" min="0" value={editForm.asistencias} onChange={(e) => handleEditFormChange('asistencias', Number(e.target.value))} className="w-14 p-1 text-xs text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" /></td>
+                            <td className="px-2"><input type="number" min="0" value={editForm.rebotes} onChange={(e) => handleEditFormChange('rebotes', Number(e.target.value))} className="w-14 p-1 text-xs text-center rounded bg-gray-950 border border-gray-700 text-white focus:outline-none" /></td>
+                          </>
+                        )}
+                        <td></td>
                         {isAdmin && (
                           <td className="px-2">
                             <div className="flex gap-1 justify-center">
@@ -1411,6 +1481,7 @@ export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador,
                     );
                   }
 
+                  const totales = totalesMostrados(jugador);
                   return (
                     <tr key={jugador.id} className="border-b border-gray-800/60 hover:bg-gray-900/60 transition-colors">
                       <td className="py-3 px-4">
@@ -1430,9 +1501,21 @@ export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador,
                           {jugador.posicion}
                         </span>
                       </td>
-                      <td className="text-center px-2 font-bold text-orange-400">{jugador.puntos}</td>
-                      <td className="text-center px-2 font-semibold text-sky-400">{jugador.asistencias}</td>
-                      <td className="text-center px-2 font-semibold text-emerald-400">{jugador.rebotes}</td>
+                      <td className="text-center px-2 font-bold text-orange-400" title={totales.esCalculado ? 'Calculado automáticamente desde los Boxscores' : 'Valor cargado a mano (todavía sin partidos en Boxscore)'}>
+                        {totales.puntos}{totales.esCalculado && <span className="text-gray-500 text-[9px] align-top">*</span>}
+                      </td>
+                      <td className="text-center px-2 font-semibold text-sky-400">{totales.asistencias}</td>
+                      <td className="text-center px-2 font-semibold text-emerald-400">{totales.rebotes}</td>
+                      <td className="px-2 text-center">
+                        <button
+                          onClick={() => handleToggleLogJugador(jugador.id)}
+                          className={`text-[10px] font-bold py-1 px-2 rounded cursor-pointer whitespace-nowrap transition-colors ${
+                            jugadorLogAbierto === jugador.id ? 'bg-[#05fcfe] text-gray-900' : 'bg-gray-800 text-gray-300 hover:text-white'
+                          }`}
+                        >
+                          📅 Partidos
+                        </button>
+                      </td>
                       {isAdmin && (
                         <td className="px-2">
                           <div className="flex gap-1 justify-center">
@@ -1444,9 +1527,67 @@ export default function Estadisticas({ jugadores, setJugadores, onDeleteJugador,
                     </tr>
                   );
                 })}
+                {/* Historial de partidos del jugador desplegado (fuera del .map para no romper el orden de las filas) */}
+                {jugadorLogAbierto !== null && (() => {
+                  const jugador = jugadores.find(j => j.id === jugadorLogAbierto);
+                  if (!jugador) return null;
+                  const historial = historialJugador(jugador.id);
+
+                  return (
+                    <tr className="bg-gray-900/60">
+                      <td colSpan={totalColumnasJugadores} className="p-4">
+                        <div className="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden">
+                          <div className="bg-gray-900 px-4 py-2 border-b border-gray-800 flex items-center justify-between">
+                            <span className="text-sm font-bold text-white">📅 Partidos jugados por {jugador.nombre}</span>
+                            <button onClick={() => setJugadorLogAbierto(null)} className="text-gray-400 hover:text-white text-xs cursor-pointer">✕ Cerrar</button>
+                          </div>
+                          {historial.length === 0 ? (
+                            <div className="py-6 text-center text-gray-500 text-sm">Todavía no hay boxscores cargados para este jugador.</div>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs text-left whitespace-nowrap">
+                                <thead>
+                                  <tr className="text-gray-500 uppercase tracking-wider border-b border-gray-800">
+                                    <th className="py-2 px-3">Fecha</th>
+                                    <th className="py-2 px-2">Jornada</th>
+                                    <th className="py-2 px-2">Rival</th>
+                                    <th className="py-2 px-2 text-center">MIN</th>
+                                    <th className="py-2 px-2 text-center">PTS</th>
+                                    <th className="py-2 px-2 text-center">AST</th>
+                                    <th className="py-2 px-2 text-center">REB</th>
+                                    <th className="py-2 px-2 text-center">FG%</th>
+                                    <th className="py-2 px-2 text-center">3P%</th>
+                                    <th className="py-2 px-2 text-center">FT%</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {historial.map(({ partido, rival, stats }) => (
+                                    <tr key={partido.id} className="border-b border-gray-800/60">
+                                      <td className="py-2 px-3 text-gray-400">{partido.fecha}</td>
+                                      <td className="px-2 text-gray-500">{partido.jornada || '-'}</td>
+                                      <td className="px-2 text-white font-semibold">{rival}</td>
+                                      <td className="text-center px-2 text-gray-200">{stats.min}</td>
+                                      <td className="text-center px-2 font-bold text-orange-400">{stats.pts}</td>
+                                      <td className="text-center px-2 font-semibold text-sky-400">{stats.ast}</td>
+                                      <td className="text-center px-2 font-semibold text-emerald-400">{stats.reb}</td>
+                                      <td className="text-center px-2 text-gray-300">{formatPct(stats.fgM, stats.fgA)}</td>
+                                      <td className="text-center px-2 text-gray-300">{formatPct(stats.tpM, stats.tpA)}</td>
+                                      <td className="text-center px-2 text-gray-300">{formatPct(stats.ftM, stats.ftA)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })()}
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
       )}
